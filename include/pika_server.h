@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #ifndef PIKA_SERVER_H_
 #define PIKA_SERVER_H_
 
@@ -41,33 +46,15 @@ public:
   }
   int port() {
     return port_;
-  };
+  }
   time_t start_time_s() {
     return start_time_s_;
   }
-  PikaWorkerThread** pika_worker_thread() {
-    return pika_worker_thread_;
-  };
-  PikaDispatchThread* pika_dispatch_thread() {
-    return pika_dispatch_thread_;
-  };
-  PikaBinlogReceiverThread* pika_binlog_receiver_thread() {
-    return pika_binlog_receiver_thread_;
-  }
-  PikaHeartbeatThread* pika_heartbeat_thread() {
-    return pika_heartbeat_thread_;
-  }
-  PikaTrysyncThread* pika_trysync_thread() {
-    return pika_trysync_thread_;
-  }
-  std::string& master_ip() {
+  std::string master_ip() {
     return master_ip_;
   }
   int master_port() {
     return master_port_;
-  }
-  pthread_rwlock_t* rwlock() {
-      return &rwlock_;
   }
   const std::shared_ptr<nemo::Nemo> db() {
     return db_;
@@ -86,7 +73,7 @@ public:
  * Master use
  */
   int64_t GenSid() {
-//    slash::MutexLock l(&slave_mutex_);
+    // slave_mutex has been locked from exterior
     int64_t sid = sid_;
     sid_++;
     return sid;
@@ -101,7 +88,6 @@ public:
 
   slash::Mutex slave_mutex_; // protect slaves_;
   std::vector<SlaveItem> slaves_;
-//  pthread_mutex_t binlog_sender_mutex_;
   std::vector<PikaBinlogSenderThread *> binlog_sender_threads_;
 
 /*
@@ -114,22 +100,21 @@ public:
   void MinusMasterConnection();
   void PlusMasterConnection();
   bool ShouldAccessConnAsMaster(const std::string& ip);
+  void SyncError();
   void RemoveMaster();
   bool WaitingDBSync();
   void NeedWaitDBSync();
   void WaitDBSyncFinish();
+  void KillBinlogSenderConn();
 
   void Start();
   void Exit() {
     exit_ = true;
   }
-  void DoTimingTask() {
-    AutoPurge();
-  }
+  void DoTimingTask();
   void Cleanup();
 
   PikaSlavepingThread* ping_thread_;
-  //slash::Mutex mutex_; // double lock to block main thread
 
 /*
  * Server init info
@@ -150,14 +135,12 @@ public:
     time_t start_time;
     std::string s_start_time;
     std::string path;
-    std::string tmp_path;
     uint32_t filenum;
     uint64_t offset;
     BGSaveInfo() : bgsaving(false), filenum(0), offset(0){}
     void Clear() {
       bgsaving = false;
       path.clear();
-      tmp_path.clear();
       filenum = 0;
       offset = 0;
     }
@@ -170,18 +153,57 @@ public:
     slash::MutexLock l(&bgsave_protector_);
     return bgsave_info_.bgsaving;
   }
-  slash::Mutex* bgsave_protector() {
-    return &bgsave_protector_;
-  }
   void Bgsave();
   bool Bgsaveoff();
   bool RunBgsaveEngine(const std::string path);
-  // need bgsave_protector protect
-  void ClearBgsave() {
-    bgsave_info_.Clear();
-  }
   void FinishBgsave() {
+    slash::MutexLock l(&bgsave_protector_);
     bgsave_info_.bgsaving = false;
+  }
+
+
+/*
+ * BGSlotsReload used
+ */
+  struct BGSlotsReload {
+    bool reloading;
+    time_t start_time;
+    std::string s_start_time;
+    int64_t cursor;
+    std::string pattern;
+    int64_t count;
+    BGSlotsReload() : reloading(false), cursor(0), pattern("*"), count(100){}
+    void Clear() {
+      reloading = false;
+      pattern = "*";
+      count = 100;
+      cursor = 0;
+    }
+  };
+  BGSlotsReload bgslots_reload() {
+    slash::MutexLock l(&bgsave_protector_);
+    return bgslots_reload_;
+  }
+  bool GetSlotsreloading() {
+    slash::MutexLock l(&bgsave_protector_);
+    return bgslots_reload_.reloading;
+  }
+  void SetSlotsreloading(bool reloading) {
+    slash::MutexLock l(&bgsave_protector_);
+    bgslots_reload_.reloading = reloading;
+  }
+  void SetSlotsreloadingCursor(int64_t cursor) {
+    slash::MutexLock l(&bgsave_protector_);
+    bgslots_reload_.cursor = cursor;
+  }
+  int64_t GetSlotsreloadingCursor() {
+    slash::MutexLock l(&bgsave_protector_);
+    return bgslots_reload_.cursor;
+  }
+  void Bgslotsreload();
+  void StopBgslotsreload() {
+    slash::MutexLock l(&bgsave_protector_);
+    bgslots_reload_.reloading = false;
   }
 
 /*
@@ -239,6 +261,7 @@ public:
   }
   void KeyScan();
   void RunKeyScan();
+  void StopKeyScan();
   
 
 /*
@@ -246,14 +269,19 @@ public:
  */
   void ClientKillAll();
   int ClientKill(const std::string &ip_port);
-  int64_t ClientList(std::vector< std::pair<int, std::string> > *clients = NULL);
+  int64_t ClientList(std::vector<ClientInfo> *clients = NULL);
+
+  // rwlock_
+  void RWLockWriter();
+  void RWLockReader();
+  void RWUnlock();
 
 /*
  * Monitor used
  */
-  PikaMonitorThread* monitor_thread() {
-    return monitor_thread_;
-  }
+  void AddMonitorClient(pink::RedisConn* client_ptr);
+  void AddMonitorMessage(const std::string &monitor_message);
+  bool HasMonitorClients();
 
 /*
  * Binlog Receiver use
@@ -275,6 +303,7 @@ void SignalNextBinlogBGSerial();
   void incr_accumulative_connections() {
     ++accumulative_connections_;  
   }
+  void ResetStat();
   slash::RecordMutex mutex_record_;
 
 private:
@@ -320,7 +349,16 @@ private:
   static void DoBgsave(void* arg);
   bool InitBgsaveEnv();
   bool InitBgsaveEngine();
+  void ClearBgsave() {
+    slash::MutexLock l(&bgsave_protector_);
+    bgsave_info_.Clear();
+  }
 
+  /*
+   * BGSlotsReload use
+   */
+  BGSlotsReload bgslots_reload_;
+  static void DoBgslotsreload(void* arg);
 
   /*
    * Purgelogs use
@@ -336,7 +374,8 @@ private:
   /*
    * DBSync use
    */
-  std::unordered_set<std::string> db_sync_slaves;
+  slash::Mutex db_sync_protector_;
+  std::unordered_set<std::string> db_sync_slaves_;
   void TryDBSync(const std::string& ip, int port, int32_t top);
   void DBSync(const std::string& ip, int port);
   static void DoDBSync(void* arg);

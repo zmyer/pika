@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #ifndef PIKA_DEFINE_H_
 #define PIKA_DEFINE_H_
 
@@ -5,8 +10,14 @@
 #define PIKA_MAX_WORKER_THREAD_NUM 24
 
 
-const std::string kPikaVersion = "2.0.2";
+const std::string kPikaVersion = "2.1.4";
 const std::string kPikaPidFile = "pika.pid";
+
+struct ClientInfo {
+  int fd;
+  std::string ip_port;
+  int last_interaction;
+};
 
 struct WorkerCronTask {
   int task;
@@ -29,6 +40,8 @@ struct SlaveItem {
   struct timeval create_time;
 };
 
+#define PIKA_MIN_RESERVED_FDS 5000
+
 #define SLAVE_ITEM_STAGE_ONE 1
 #define SLAVE_ITEM_STAGE_TWO 2
 
@@ -38,6 +51,7 @@ struct SlaveItem {
 #define PIKA_REPL_CONNECTING 2
 #define PIKA_REPL_CONNECTED 3
 #define PIKA_REPL_WAIT_DBSYNC 4
+#define PIKA_REPL_ERROR 5
 
 //role
 #define PIKA_ROLE_SINGLE 0
@@ -69,9 +83,9 @@ enum RecordType {
 static const size_t kBlockSize = 64 * 1024;
 
 /*
- * Header is Type(1 byte), length (2 bytes)
+ * Header is Type(1 byte), length (3 bytes), time (4 bytes)
  */
-static const size_t kHeaderSize = 1 + 3;
+static const size_t kHeaderSize = 1 + 3 + 4;
 
 /*
  * the size of memory when we use memory mode
@@ -97,6 +111,8 @@ const std::string kManifest = "manifest";
 const std::string kInnerReplOk = "ok";
 const std::string kInnerReplWait = "wait";
 
+const unsigned int kMaxBitOpInputKey = 12800;
+const int kMaxBitOpInputBit = 21;
 /*
  * db sync
  */

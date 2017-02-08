@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #ifndef PIKA_COMMAND_H_
 #define PIKA_COMMAND_H_
 
@@ -27,6 +32,19 @@ const std::string kCmdNameShutdown = "shutdown";
 const std::string kCmdNameInfo = "info";
 const std::string kCmdNameConfig = "config";
 const std::string kCmdNameMonitor = "monitor";
+const std::string kCmdNameDbsize = "dbsize";
+
+//Migrate slot
+const std::string kCmdNameSlotsMgrtSlot = "slotsmgrtslot";
+const std::string kCmdNameSlotsMgrtTagSlot = "slotsmgrttagslot";
+const std::string kCmdNameSlotsMgrtOne = "slotsmgrtone";
+const std::string kCmdNameSlotsMgrtTagOne = "slotsmgrttagone";
+const std::string kCmdNameSlotsInfo = "slotsinfo";
+const std::string kCmdNameSlotsHashKey = "slotshashkey";
+const std::string kCmdNameSlotsReload = "slotsreload";
+const std::string kCmdNameSlotsReloadOff = "slotsreloadoff";
+const std::string kCmdNameSlotsDel = "slotsdel";
+const std::string kCmdNameSlotsScan = "slotsscan";
 
 //Kv
 const std::string kCmdNameSet = "set";
@@ -91,6 +109,13 @@ const std::string kCmdNameRPopLPush = "rpoplpush";
 const std::string kCmdNameRPush = "rpush";
 const std::string kCmdNameRPushx = "rpushx";
 
+//BitMap
+const std::string kCmdNameBitSet = "setbit";
+const std::string kCmdNameBitGet = "getbit";
+const std::string kCmdNameBitPos = "bitpos";
+const std::string kCmdNameBitOp = "bitop";
+const std::string kCmdNameBitCount = "bitcount";
+
 //Zset
 const std::string kCmdNameZAdd = "zadd";
 const std::string kCmdNameZCard = "zcard";
@@ -127,9 +152,14 @@ const std::string kCmdNameSInter = "sinter";
 const std::string kCmdNameSInterstore = "sinterstore";
 const std::string kCmdNameSIsmember = "sismember";
 const std::string kCmdNameSDiff = "sdiff";
-const std::string kCmdNameSDiffstore= "sdiffstore";
-const std::string kCmdNameSMove= "smove";
-const std::string kCmdNameSRandmember= "srandmember";
+const std::string kCmdNameSDiffstore = "sdiffstore";
+const std::string kCmdNameSMove = "smove";
+const std::string kCmdNameSRandmember = "srandmember";
+
+//HyperLogLog
+const std::string kCmdNamePfAdd = "pfadd";
+const std::string kCmdNamePfCount = "pfcount";
+const std::string kCmdNamePfMerge = "pfmerge";
 
 typedef pink::RedisCmdArgsType PikaCmdArgsType;
 
@@ -151,6 +181,8 @@ enum CmdFlags {
   kCmdFlagsList           = 6,
   kCmdFlagsSet            = 8,
   kCmdFlagsZset           = 10,
+  kCmdFlagsBit            = 12,
+  kCmdFlagsHyperLogLog    = 14,
   kCmdFlagsNoLocal        = 0, //default nolocal
   kCmdFlagsLocal          = 16,
   kCmdFlagsNoSuspend      = 0, //default nosuspend
@@ -217,6 +249,10 @@ public:
     kPong,
     kSyntaxErr,
     kInvalidInt,
+    kInvalidBitInt,
+    kInvalidBitOffsetInt,
+    kInvalidBitPosArgument,
+    kWrongBitOpNotNum,
     kInvalidFloat,
     kOverFlow,
     kNotFound,
@@ -257,6 +293,15 @@ public:
       return "-ERR syntax error\r\n";
     case kInvalidInt:
       return "-ERR value is not an integer or out of range\r\n";
+    case kInvalidBitInt:
+      return "-ERR bit is not an integer or out of range\r\n";
+    case kInvalidBitOffsetInt:
+      return "-ERR bit offset is not an integer or out of range\r\n";
+    case kWrongBitOpNotNum:
+      return "-ERR BITOP NOT must be called with a single source key.\r\n";
+
+    case kInvalidBitPosArgument:
+      return "-ERR The bit argument must be 1 or 0.\r\n";
     case kInvalidFloat:
       return "-ERR value is not an float\r\n";
     case kOverFlow:

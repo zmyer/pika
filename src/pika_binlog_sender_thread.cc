@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include "pika_binlog_sender_thread.h"
 
 #include <glog/logging.h>
@@ -36,14 +41,12 @@ PikaBinlogSenderThread::~PikaBinlogSenderThread() {
 
   pthread_join(thread_id(), NULL);
 
-  if (queue_ != NULL) {
-    delete queue_;
-  }
+  delete queue_;
   pthread_rwlock_destroy(&rwlock_);
   delete [] backing_store_;
   delete cli_;
 
-  DLOG(INFO) << "a BinlogSender thread " << thread_id() << " exit!";
+  LOG(INFO) << "a BinlogSender thread " << thread_id() << " exit!";
 }
 
 int PikaBinlogSenderThread::trim() {
@@ -87,7 +90,7 @@ uint64_t PikaBinlogSenderThread::get_next(bool &is_error) {
     const uint32_t a = static_cast<uint32_t>(header[0]) & 0xff;
     const uint32_t b = static_cast<uint32_t>(header[1]) & 0xff;
     const uint32_t c = static_cast<uint32_t>(header[2]) & 0xff;
-    const unsigned int type = header[3];
+    const unsigned int type = header[7];
     const uint32_t length = a | (b << 8) | (c << 16);
 
     if (type == kFullType) {
@@ -131,7 +134,7 @@ unsigned int PikaBinlogSenderThread::ReadPhysicalRecord(slash::Slice *result) {
   const uint32_t a = static_cast<uint32_t>(header[0]) & 0xff;
   const uint32_t b = static_cast<uint32_t>(header[1]) & 0xff;
   const uint32_t c = static_cast<uint32_t>(header[2]) & 0xff;
-  const unsigned int type = header[3];
+  const unsigned int type = header[7];
   const uint32_t length = a | (b << 8) | (c << 16);
   if (type == kZeroType || length == 0) {
     buffer_.clear();
@@ -255,9 +258,10 @@ void* PikaBinlogSenderThread::ThreadMain() {
 
   while (!should_exit_) {
 
+    sleep(1);
     // 1. Connect to slave
-    result = cli_->Connect(ip_, port_);
-    DLOG(INFO) << "BinlogSender Connect slave(" << ip_ << ":" << port_ << ") " << result.ToString();
+    result = cli_->Connect(ip_, port_, g_pika_server->host());
+    LOG(INFO) << "BinlogSender Connect slave(" << ip_ << ":" << port_ << ") " << result.ToString();
 
     if (result.ok()) {
       while (true) {
@@ -267,7 +271,7 @@ void* PikaBinlogSenderThread::ThreadMain() {
           //DLOG(INFO) << "BinlogSender Parse, return " << s.ToString();
 
           if (s.IsCorruption()) {     // should exit
-            DLOG(INFO) << "BinlogSender will exit";
+            LOG(WARNING) << "BinlogSender Parse failed, will exit, error: " << s.ToString();
             //close(sockfd_);
             break;
           } else if (s.IsIOError()) {
@@ -290,7 +294,7 @@ void* PikaBinlogSenderThread::ThreadMain() {
     }
 
     // error
-    close(cli_->fd());
+    cli_->Close();
     sleep(1);
   }
   return NULL;

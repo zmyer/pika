@@ -1,12 +1,44 @@
 # Pika
 ## 简介 [English](https://github.com/Qihoo360/pika/blob/master/README.md)
-Pika是一个可持久化的大容量redis存储服务，兼容string、hash、list、zset、set的绝大接口([兼容详情](https://github.com/Qihoo360/pika/wiki/pika支持的redis接口及兼容情况))，解决redis由于存储数据量巨大而导致内存不够用的容量瓶颈，并且可以像redis一样，通过slaveof命令进行主从备份，支持全同步和部分同步
+Pika是一个可持久化的大容量redis存储服务，兼容string、hash、list、zset、set的绝大接口([兼容详情](https://github.com/Qihoo360/pika/wiki/pika-支持的redis接口及兼容情况))，解决redis由于存储数据量巨大而导致内存不够用的容量瓶颈，并且可以像redis一样，通过slaveof命令进行主从备份，支持全同步和部分同步，pika还可以用在twemproxy或者codis中来实现静态数据分片（pika已经可以支持codis的动态迁移slot功能，目前在合并到master分支，欢迎使用，感谢作者[left2right](https://github.com/left2right)同学提交pr）
+##Pika用户
+
+<img src="http://i.imgur.com/dcHpCm4.png" height = "100" width = "120" alt="Qihoo">
+<img src="http://i.imgur.com/jjZczkN.png" height = "100" width = "120" alt="Weibo">
+<img src="http://i.imgur.com/zoel46r.gif" height = "100" width = "120" alt="Garena">
+<img src="http://i.imgur.com/kHqACbn.png" height = "100" width = "120" alt="Apus">
+<img src="http://i.imgur.com/2c57z8U.png" height = "100" width = "120" alt="Ffan">
+
+<img src="http://i.imgur.com/rUiO5VU.png" height = "100" width = "120" alt="Meituan">
+<img src="http://i.imgur.com/px5mEuW.png" height = "100" width = "120" alt="XES">
+<img src="http://imgur.com/yJe4FP8.png" height = "100" width = "120" alt="HX">
+<img src="http://i.imgur.com/o8ZDXCH.png" height = "100" width = "120" alt="XL">
+<img src="http://imgur.com/w3qNQ9T.png" height = "100" width = "120" alt="GWD">
+
+<img src="http://i.imgur.com/Ll6SifR.png" height = "100" width = "120" alt="DYD">
+<img src="http://i.imgur.com/vJbAfri.png" height = "100" width = "120" alt="YM">
+
+
+[更多](https://github.com/Qihoo360/pika/blob/master/USERS.md)
 
 ## 特点
 * 容量大，支持百G数据量的存储
 * 兼容redis，不用修改代码即可平滑从redis迁移到pika
 * 支持主从(slaveof)
 * 完善的[运维](https://github.com/Qihoo360/pika/wiki/pika的一些管理命令方式说明)命令
+
+
+## 快速试用
+  如果想快速试用pika，目前提供了Centos5，Centos6的binary版本，可以在[release页面](https://github.com/Qihoo360/pika/releases)看到，具体文件是pikaX.Y.Z_centosK_bin.tar.gz。
+
+```
+# 1. 解压文件
+tar zxf pikaX.Y.Z_centosK_bin.tar.gz
+# 2. 切到output目录（rpath是./lib）
+cd output
+# 3. 运行pika:
+./bin/pika -c conf/pika.conf
+```
 
 ## 编译安装
 
@@ -22,26 +54,21 @@ Pika是一个可持久化的大容量redis存储服务，兼容string、hash、l
     yum install gcc-c++
 ```
 
-3.把gcc版本临时切换到4.7(若已是，则忽略), 在CentOs上执行如下命令：
+3.把gcc版本临时切换到4.8(若已是，则忽略), 在CentOs上执行如下命令：
 
 ```
-	a. sudo wget -O /etc/yum.repos.d/slc6-devtoolset.repo http://linuxsoft.cern.ch/cern/devtoolset/slc6-devtoolset.repo
-	b. yum install --nogpgcheck devtoolset-1.1
-	c. scl enable devetoolset-1.1 bash
+	a. sudo rpm --import http://ftp.scientificlinux.org/linux/scientific/5x/x86_64/RPM-GPG-KEYs/RPM-GPG-KEY-cern
+	b. sudo wget http://people.centos.org/tru/devtools-2/devtools-2.repo -O /etc/yum.repos.d/devtools-2.repo
+	c. sudo yum install -y devtoolset-2-gcc devtoolset-2-binutils devtoolset-2-gcc-c++
+	d. scl enable devtoolset-2 bash
 ```
 4.获取源代码
 
 ```
-	git clone https://github.com/Qihoo360/pika.git && cd pika
-```
-5.获取依赖的第三方源代码
-
-```
-	a. git submodule init
-	b. git submodule update
+	git clone --recursive https://github.com/Qihoo360/pika.git && cd pika
 ```
 
-6.编译
+5.编译
 
 ```
 	make __REL=1
@@ -61,29 +88,76 @@ PIKA_SOURCE表示的pika的源代码根目录；
 _VERSION表示的是编译机的CenOS版本，如6.2， 5.4...
 RPATH在Makefile定义，表示的是程序运行的库预先加载路径
 
+
 ## 性能
+
+###测试环境：
 ```
-服务端配置：
+	相同配置服务端、客户机各一台：
 	处理器：24核 Intel(R) Xeon(R) CPU E5-2630 v2 @ 2.60GHz
 	内存：165157944 kB
 	操作系统：CentOS release 6.2 (Final)
 	网卡：Intel Corporation I350 Gigabit Network Connection
-客户端配置：
-	同服务端
-	
-测试结果：
-	pika配置18个worker，用40个客户端；
-	1. 写性能测试：
-		方法：客户端依次执行set、hset、lpush、zadd、sadd接口写入数据，每个数据结构10000个key；
-		结果：qps 110000
-	2. 读性能测试：
-		方法：客户端一次执行get、hget、lindex、zscore、smembers，每个数据结构5000000个key；
-		结果：qps 170000
 ```
+###测试接口：
+```
+	Set、Get
+```
+
+###测试方法：
+```
+	pika配16个worker，客户机执行 ./redis-benchmark -h ... -p ... -n 1000000000 -t set,get -r 10000000000 -c 120 -d 200
+	通过set和get接口对pika进行10亿次写入+10亿次读取
+```
+
+###测试结果：
+```
+    Set
+    1000000000 requests completed in 11890.80 seconds
+    18.09% <= 1 milliseconds
+    93.32% <= 2 milliseconds
+    99.71% <= 3 milliseconds
+    99.86% <= 4 milliseconds
+    99.92% <= 5 milliseconds
+    99.94% <= 6 milliseconds
+    99.96% <= 7 milliseconds
+    99.97% <= 8 milliseconds
+    99.97% <= 9 milliseconds
+    99.98% <= 10 milliseconds
+    99.98% <= 11 milliseconds
+    99.99% <= 12 milliseconds
+    ...
+    100.00% <= 19 milliseconds
+    ...
+    100.00% <= 137 milliseconds
+
+    84098.66 requests per second
+```
+
+```
+    Get
+    1000000000 requests completed in 9063.05 seconds
+    84.97% <= 1 milliseconds
+    99.76% <= 2 milliseconds
+    99.99% <= 3 milliseconds
+    100.00% <= 4 milliseconds
+    ...
+    100.00% <= 33 milliseconds
+
+    110338.10 requests per second
+```
+
+###与SSDB性能对比（[详情](https://github.com/Qihoo360/pika/wiki/pika-vs-ssdb)）
+<img src="http://imgur.com/rGMZmpD.png" height = "400" width = "480" alt="1">
+<img src="http://imgur.com/gnwMDof.png" height = "400" width = "480" alt="10">
+
+###与Redis性能对比
+<img src="http://imgur.com/k99VyFN.png" height = "400" width = "600" alt="2">
+
 ## 文档
 1. [Wiki] (https://github.com/Qihoo360/pika/wiki)
 
 ## 联系方式
-邮箱：songzhao@360.cn
+邮箱：g-infra-bada@360.cn
 
 QQ群：294254078

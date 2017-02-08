@@ -1,7 +1,13 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include "slash_string.h"
 #include "nemo.h"
 #include "pika_zset.h"
 #include "pika_server.h"
+#include "pika_slot.h"
 
 extern PikaServer *g_pika_server;
 
@@ -43,6 +49,7 @@ void ZAddCmd::Do() {
       return;
     }
   }
+  SlotKeyAdd("z", key_);
   res_.AppendInteger(count);
   return;
 }
@@ -171,6 +178,7 @@ void ZIncrbyCmd::Do() {
   if (s.ok()) {
     res_.AppendStringLen(new_value.size());
     res_.AppendContent(new_value);
+    SlotKeyAdd("z", key_);
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
@@ -294,7 +302,7 @@ static nemo::Status DoScoreStrRange(std::string begin_score, std::string end_sco
   if (begin_score == "-inf") {
     *min_score = nemo::ZSET_SCORE_MIN;
   } else if (begin_score == "inf" || begin_score == "+inf") {
-    *max_score = nemo::ZSET_SCORE_MAX;
+    *min_score = nemo::ZSET_SCORE_MAX;
   } else if (!slash::string2d(begin_score.data(), begin_score.size(), min_score)) {
     return nemo::Status::Corruption("min or max is not a float");
   } 
@@ -498,6 +506,8 @@ void ZRemCmd::Do() {
     }
   }
   res_.AppendInteger(count);
+
+  KeyNotExistsRem("z", key_);
   return;
 }
 
@@ -887,6 +897,7 @@ void ZRemrangebyrankCmd::Do() {
   nemo::Status s = g_pika_server->db()->ZRemrangebyrank(key_, start_rank_, stop_rank_, &count);
   if (s.ok()) {
     res_.AppendInteger(count);
+    KeyNotExistsRem("z", key_);
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
@@ -918,6 +929,7 @@ void ZRemrangebyscoreCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
     return;
   }
+  KeyNotExistsRem("z", key_);
   res_.AppendInteger(count);
   return;
 }
@@ -953,21 +965,8 @@ void ZRemrangebylexCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
     return;
   }
+  KeyNotExistsRem("z", key_);
   res_.AppendInteger(count);
   return;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

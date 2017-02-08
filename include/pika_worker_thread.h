@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #ifndef PIKA_WORKER_THREAD_H_
 #define PIKA_WORKER_THREAD_H_
 
@@ -17,13 +22,19 @@ public:
   virtual ~PikaWorkerThread();
   virtual void CronHandle();
 
-  int64_t ThreadClientList(std::vector< std::pair<int, std::string> > *clients = NULL);
+  int64_t ThreadClientList(std::vector<ClientInfo> *clients = NULL);
   bool ThreadClientKill(std::string ip_port = "");
   int ThreadClientNum();
 
   uint64_t thread_querynum() {
     slash::RWLock(&rwlock_, false);
     return thread_querynum_;
+  }
+
+  void ResetThreadQuerynum() {
+    slash::RWLock(&rwlock_, true);
+    thread_querynum_ = 0;
+    last_thread_querynum_ = 0;
   }
 
   uint64_t last_sec_thread_querynum() {

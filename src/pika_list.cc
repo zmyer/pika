@@ -1,8 +1,14 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include <vector>
 #include "slash_string.h"
 #include "nemo.h"
 #include "pika_list.h"
 #include "pika_server.h"
+#include "pika_slot.h"
 
 extern PikaServer *g_pika_server;
 
@@ -102,6 +108,7 @@ void LPushCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   } else {
     res_.AppendInteger(llen);
+    SlotKeyAdd("l", key_);
   }
 }
 
@@ -117,6 +124,7 @@ void LPopCmd::Do() {
   nemo::Status s = g_pika_server->db()->LPop(key_, &value);
   if (s.ok()) {
     res_.AppendString(value);
+    KeyNotExistsRem("l", key_);
   } else if (s.IsNotFound()) {
     res_.AppendStringLen(-1);
   } else {
@@ -137,6 +145,7 @@ void LPushxCmd::Do() {
   nemo::Status s = g_pika_server->db()->LPushx(key_, value_, &llen);
   if (s.ok() || s.IsNotFound()) {
     res_.AppendInteger(llen);
+    SlotKeyAdd("l", key_);
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
@@ -196,6 +205,7 @@ void LRemCmd::Do() {
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
+  KeyNotExistsRem("l", key_);
 }
 
 void LSetCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
@@ -263,6 +273,7 @@ void RPopCmd::Do() {
   nemo::Status s = g_pika_server->db()->RPop(key_, &value);
   if (s.ok()) {
     res_.AppendString(value);
+    KeyNotExistsRem("l", key_);
   } else if (s.IsNotFound()) {
     res_.AppendStringLen(-1);
   } else {
@@ -284,7 +295,7 @@ void RPopLPushCmd::Do() {
   if (s.ok()) {
     res_.AppendString(value);
   } else if (s.IsNotFound() && s.ToString() == "NotFound: not found the source key") {
-    res_.AppendStringLen(-1);  
+    res_.AppendStringLen(-1);
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }
@@ -315,6 +326,7 @@ void RPushCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   } else {
     res_.AppendInteger(llen);
+    SlotKeyAdd("l", key_);
   }
 }
 
@@ -331,6 +343,7 @@ void RPushxCmd::Do() {
   nemo::Status s = g_pika_server->db()->RPushx(key_, value_, &llen);
   if (s.ok() || s.IsNotFound()) {
     res_.AppendInteger(llen);
+    SlotKeyAdd("l", key_);
   } else {
     res_.SetRes(CmdRes::kErrOther, s.ToString());
   }

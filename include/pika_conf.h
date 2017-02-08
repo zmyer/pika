@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #ifndef PIKA_CONF_H_
 #define PIKA_CONF_H_
 #include <pthread.h>
@@ -20,6 +25,7 @@ public:
 
   // Getter
   int port()              { RWLock l(&rwlock_, false); return port_; }
+  std::string slaveof() {RWLock l(&rwlock_, false); return slaveof_;}
   int thread_num()        { RWLock l(&rwlock_, false); return thread_num_; }
   int sync_thread_num()        { RWLock l(&rwlock_, false); return sync_thread_num_; }
   int sync_buffer_size()        { RWLock l(&rwlock_, false); return sync_buffer_size_; }
@@ -32,6 +38,8 @@ public:
   int timeout()           { RWLock l(&rwlock_, false); return timeout_; }
 
   std::string requirepass()     { RWLock l(&rwlock_, false); return requirepass_; }
+  std::string masterauth()     { RWLock l(&rwlock_, false); return masterauth_; }
+  bool slotmigrate()     { RWLock l(&rwlock_, false); return slotmigrate_; }
   std::string bgsave_path()     { RWLock l(&rwlock_, false); return bgsave_path_; }
   std::string bgsave_prefix()     { RWLock l(&rwlock_, false); return bgsave_prefix_; }
   std::string userpass()        { RWLock l(&rwlock_, false); return userpass_; }
@@ -44,13 +52,17 @@ public:
   }
   std::string compression()     { RWLock l(&rwlock_, false); return compression_; }
   int target_file_size_base()   { RWLock l(&rwlock_, false); return target_file_size_base_; }
+  int max_background_flushes()  { RWLock l(&rwlock_, false); return max_background_flushes_; }
+  int max_background_compactions()   { RWLock l(&rwlock_, false); return max_background_compactions_; }
+  int max_cache_files()          { RWLock l(&rwlock_, false); return max_cache_files_; }
   int expire_logs_nums()        { RWLock l(&rwlock_, false); return expire_logs_nums_; }
   int expire_logs_days()        { RWLock l(&rwlock_, false); return expire_logs_days_; }
   std::string conf_path()       { RWLock l(&rwlock_, false); return conf_path_; }
   bool readonly()               { RWLock l(&rwlock_, false); return readonly_; }
-  int maxconnection()           { RWLock l(&rwlock_, false); return maxconnection_; }
+  int maxclients()           { RWLock l(&rwlock_, false); return maxclients_; }
   int root_connection_num()     { RWLock l(&rwlock_, false); return root_connection_num_; }
   int slowlog_slower_than()     { RWLock l(&rwlock_, false); return slowlog_log_slower_than_; }
+  std::string network_interface() { RWLock l(&rwlock_, false); return network_interface_; }
 
   // Immutable config items, we don't use lock.
   bool daemonize()              { return daemonize_; }
@@ -62,6 +74,10 @@ public:
   void SetThreadNum(const int value)            { RWLock l(&rwlock_, true); thread_num_ = value; }
   void SetLogLevel(const int value)             { RWLock l(&rwlock_, true); log_level_ = value; }
   void SetTimeout(const int value)              { RWLock l(&rwlock_, true); timeout_ = value; }
+  void SetSlaveof(const std::string value) {
+    RWLock l(&rwlock_, true);
+    slaveof_ = value;
+  }
   void SetBgsavePath(const std::string &value) {
     RWLock l(&rwlock_, true);
     bgsave_path_ = value;
@@ -76,6 +92,14 @@ public:
   void SetRequirePass(const std::string &value) {
     RWLock l(&rwlock_, true);
     requirepass_ = value;
+  }
+  void SetMasterAuth(const std::string &value) {
+    RWLock l(&rwlock_, true);
+    masterauth_ = value;
+  }
+  void SetSlotMigrate(const std::string &value) {
+    RWLock l(&rwlock_, true);
+    slotmigrate_ =  (value == "yes") ? true : false;
   }
   void SetUserPass(const std::string &value) {
     RWLock l(&rwlock_, true);
@@ -98,7 +122,7 @@ public:
   }
   void SetMaxConnection(const int value) {
     RWLock l(&rwlock_, true);
-    maxconnection_ = value;
+    maxclients_ = value;
   }
   void SetRootConnectionNum(const int value) {
     RWLock l(&rwlock_, true);
@@ -118,6 +142,7 @@ public:
 
 private:
   int port_;
+  std::string slaveof_;
   int thread_num_;
   int sync_thread_num_;
   int sync_buffer_size_;
@@ -128,8 +153,10 @@ private:
   int write_buffer_size_;
   int log_level_;
   bool daemonize_;
+  bool slotmigrate_;
   int timeout_;
   std::string requirepass_;
+  std::string masterauth_;
   std::string userpass_;
   std::vector<std::string> user_blacklist_;
   std::string bgsave_path_;
@@ -138,13 +165,18 @@ private:
 
   //char pidfile_[PIKA_WORD_SIZE];
   std::string compression_;
-  int maxconnection_;
+  int maxclients_;
   int root_connection_num_;
   int slowlog_log_slower_than_;
   int expire_logs_days_;
   int expire_logs_nums_;
   bool readonly_;
   std::string conf_path_;
+  int max_background_flushes_;
+  int max_background_compactions_;
+  int max_cache_files_;
+  std::string network_interface_;
+
   //char username_[30];
   //char password_[30];
 

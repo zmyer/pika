@@ -1,8 +1,15 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include <glog/logging.h>
+#include <sys/resource.h>
 #include "pika_server.h"
 #include "pika_command.h"
 #include "pika_conf.h"
 #include "pika_define.h"
+#include "pika_slot.h"
 #include "env.h"
 
 PikaConf *g_pika_conf;
@@ -36,6 +43,7 @@ static void PikaGlogInit() {
   FLAGS_log_dir = g_pika_conf->log_path();
   FLAGS_minloglevel = g_pika_conf->log_level();
   FLAGS_max_log_size = 1800;
+  FLAGS_logbufsecs = 0;
   ::google::InitGoogleLogging("pika");
 }
 
@@ -74,7 +82,7 @@ static void create_pid_file(void) {
 }
 
 static void IntSigHandle(const int sig) {
-  DLOG(INFO) << "Catch Signal " << sig << ", cleanup...";
+  LOG(INFO) << "Catch Signal " << sig << ", cleanup...";
   g_pika_server->Exit();
 }
 
@@ -83,6 +91,7 @@ static void PikaSignalSetup() {
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, &IntSigHandle);
   signal(SIGQUIT, &IntSigHandle);
+  signal(SIGTERM, &IntSigHandle);
 }
 
 static void usage()
@@ -132,6 +141,21 @@ int main(int argc, char *argv[]) {
 
   PikaConfInit(path);
 
+  rlimit limit;
+  if (getrlimit(RLIMIT_NOFILE,&limit) == -1) {
+    LOG(WARNING) << "getrlimit error: " << strerror(errno);
+  } else if (limit.rlim_cur < static_cast<unsigned int>(g_pika_conf->maxclients() + PIKA_MIN_RESERVED_FDS)) {
+    rlim_t old_limit = limit.rlim_cur;
+    rlim_t best_limit = g_pika_conf->maxclients() + PIKA_MIN_RESERVED_FDS;
+    limit.rlim_cur = best_limit > limit.rlim_max ? limit.rlim_max-1 : best_limit;
+    limit.rlim_max = best_limit > limit.rlim_max ? limit.rlim_max-1 : best_limit;
+    if (setrlimit(RLIMIT_NOFILE,&limit) != -1) {
+      LOG(WARNING) << "your 'limit -n ' of " << old_limit << " is not enough for Redis to start. pika have successfully reconfig it to " << limit.rlim_cur;
+    } else {
+      LOG(FATAL) << "your 'limit -n ' of " << old_limit << " is not enough for Redis to start. pika can not reconfig it(" << strerror(errno) << "), do it by yourself";
+    }
+  }
+
   // daemonize if needed
   if (g_pika_conf->daemonize()) {
     daemonize();
@@ -142,8 +166,9 @@ int main(int argc, char *argv[]) {
   PikaGlogInit();
   PikaSignalSetup();
   InitCmdInfoTable();
+  InitCRC32Table();
 
-  DLOG(INFO) << "Server at: " << path;
+  LOG(INFO) << "Server at: " << path;
   g_pika_server = new PikaServer();
 
   if (g_pika_conf->daemonize()) {

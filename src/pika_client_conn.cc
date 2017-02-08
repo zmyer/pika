@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include <sstream>
 #include <vector>
 #include <algorithm>
@@ -41,11 +46,11 @@ std::string PikaClientConn::DoCmd(const std::string& opt) {
 
   // Check authed
   if (!auth_stat_.IsAuthed(cinfo_ptr)) {
-    LOG(INFO) << "(" << ip_port() << ")Authentication required, close connection";
+    LOG(WARNING) << "(" << ip_port() << ")Authentication required";
     return "-ERR NOAUTH Authentication required.\r\n";
   }
   
-  uint64_t start_us;
+  uint64_t start_us = 0;
   if (g_pika_conf->slowlog_slower_than() >= 0) {
     start_us = slash::NowMicros();
   }
@@ -60,13 +65,13 @@ std::string PikaClientConn::DoCmd(const std::string& opt) {
   }
 
   std::string monitor_message;
-  bool is_monitoring = g_pika_server->monitor_thread()->HasMonitorClients();
+  bool is_monitoring = g_pika_server->HasMonitorClients();
   if (is_monitoring) {
     monitor_message = std::to_string(1.0*slash::NowMicros()/1000000) + " [" + this->ip_port() + "]";
     for (PikaCmdArgsType::iterator iter = argv_.begin(); iter != argv_.end(); iter++) {
-      monitor_message += " \"" + *iter + "\"";
+      monitor_message += " " + slash::ToRead(*iter);
     }
-    g_pika_server->monitor_thread()->AddMonitorMessage(monitor_message);
+    g_pika_server->AddMonitorMessage(monitor_message);
   }
 
   if (opt == kCmdNameMonitor) {
@@ -92,7 +97,7 @@ std::string PikaClientConn::DoCmd(const std::string& opt) {
 
   // Add read lock for no suspend command
   if (!cinfo_ptr->is_suspend()) {
-    pthread_rwlock_rdlock(g_pika_server->rwlock());
+    g_pika_server->RWLockReader();
   }
 
   c_ptr->Do();
@@ -106,7 +111,7 @@ std::string PikaClientConn::DoCmd(const std::string& opt) {
   }
 
   if (!cinfo_ptr->is_suspend()) {
-      pthread_rwlock_unlock(g_pika_server->rwlock());
+      g_pika_server->RWUnlock();
   }
 
   if (cinfo_ptr->is_write()) {
@@ -124,7 +129,7 @@ std::string PikaClientConn::DoCmd(const std::string& opt) {
 
   if (opt == kCmdNameAuth) {
     if(!auth_stat_.ChecknUpdate(c_ptr->res().raw_message())) {
-      LOG(WARNING) << "(" << ip_port() << ")Wrong Password, close connection";
+      LOG(WARNING) << "(" << ip_port() << ")Wrong Password";
     }
   }
   return c_ptr->res().message();

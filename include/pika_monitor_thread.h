@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #ifndef  PIKA_MONITOR_THREAD_H_
 #define  PIKA_MONITOR_THREAD_H_
 #include <map>
@@ -19,8 +24,8 @@ public:
   virtual ~PikaMonitorThread();
 
   void AddMonitorClient(pink::RedisConn* client_ptr);
-  void AddMonitorMessage(std::string monitor_message);
-  int32_t ThreadClientList(std::vector<std::pair<int32_t, std::string> >* client = NULL);
+  void AddMonitorMessage(const std::string &monitor_message);
+  int32_t ThreadClientList(std::vector<ClientInfo>* client = NULL);
   bool ThreadClientKill(const std::string& ip_port = "all");
   bool HasMonitorClients();
 
@@ -33,7 +38,7 @@ private:
   slash::Mutex monitor_mutex_protector_;
   slash::CondVar monitor_cond_;
 
-  std::list<std::pair<int32_t, std::string> > monitor_clients_;
+  std::list<ClientInfo> monitor_clients_;
   std::deque<std::string> monitor_messages_;
   std::atomic<bool> is_running_;
   std::atomic<bool> should_exit_;

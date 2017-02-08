@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include "pika_binlog.h"
 
 #include <iostream>
@@ -5,6 +10,7 @@
 #include <stdint.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include <glog/logging.h>
 
@@ -93,23 +99,24 @@ Binlog::Binlog(const std::string& binlog_path, const int file_size) :
   std::string profile;
 
   if (!slash::FileExists(manifest)) {
-    DLOG(INFO) << "Binlog: Manifest file not exist";
+    LOG(INFO) << "Binlog: Manifest file not exist, we create a new one.";
 
     profile = NewFileName(filename, pro_num_);
     s = slash::NewWritableFile(profile, &queue_);
     if (!s.ok()) {
-      LOG(WARNING) << "Binlog: new " << filename << " " << s.ToString();
+      LOG(FATAL) << "Binlog: new " << filename << " " << s.ToString();
     }
+
 
     s = slash::NewRWFile(manifest, &versionfile_);
     if (!s.ok()) {
-      LOG(WARNING) << "Binlog: new versionfile error " << s.ToString();
+      LOG(FATAL) << "Binlog: new versionfile error " << s.ToString();
     }
 
     version_ = new Version(versionfile_);
     version_->StableSave();
   } else {
-    DLOG(INFO) << "Binlog: Find the exist file ";
+    LOG(INFO) << "Binlog: Find the exist file.";
 
     s = slash::NewRWFile(manifest, &versionfile_);
     if (s.ok()) {
@@ -120,12 +127,16 @@ Binlog::Binlog(const std::string& binlog_path, const int file_size) :
       // Debug
       //version_->debug();
     } else {
-      LOG(WARNING) << "Binlog: open versionfile error";
+      LOG(FATAL) << "Binlog: open versionfile error";
     }
 
     profile = NewFileName(filename, pro_num_);
     DLOG(INFO) << "Binlog: open profile " << profile;
-    slash::AppendWritableFile(profile, &queue_, version_->pro_offset_);
+    s = slash::AppendWritableFile(profile, &queue_, version_->pro_offset_);
+    if (!s.ok()) {
+      LOG(FATAL) << "Binlog: Open file " << profile << " error " << s.ToString();
+    }
+
     uint64_t filesize = queue_->Filesize();
     DLOG(INFO) << "Binlog: filesize is " << filesize;
   }
@@ -244,10 +255,18 @@ Status Binlog::EmitPhysicalRecord(RecordType t, const char *ptr, size_t n, int *
 
     char buf[kHeaderSize];
 
+    uint64_t now;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    now = tv.tv_sec;
     buf[0] = static_cast<char>(n & 0xff);
     buf[1] = static_cast<char>((n & 0xff00) >> 8);
     buf[2] = static_cast<char>(n >> 16);
-    buf[3] = static_cast<char>(t);
+    buf[3] = static_cast<char>(now & 0xff);
+    buf[4] = static_cast<char>((now & 0xff00) >> 8);
+    buf[5] = static_cast<char>((now & 0xff0000) >> 16);
+    buf[6] = static_cast<char>((now & 0xff000000) >> 24);
+    buf[7] = static_cast<char>(t);
 
     s = queue_->Append(Slice(buf, kHeaderSize));
     if (s.ok()) {
@@ -330,10 +349,18 @@ Status Binlog::AppendBlank(slash::WritableFile *file, uint64_t len) {
   }
 
   char buf[kBlockSize];
+  uint64_t now;
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  now = tv.tv_sec;
   buf[0] = static_cast<char>(n & 0xff);
   buf[1] = static_cast<char>((n & 0xff00) >> 8);
   buf[2] = static_cast<char>(n >> 16);
-  buf[3] = static_cast<char>(kFullType);
+  buf[3] = static_cast<char>(now & 0xff);
+  buf[4] = static_cast<char>((now & 0xff00) >> 8);
+  buf[5] = static_cast<char>((now & 0xff0000) >> 16);
+  buf[6] = static_cast<char>((now & 0xff000000) >> 24);
+  buf[7] = static_cast<char>(kFullType);
 
   Status s = file->Append(Slice(buf, kHeaderSize));
   if (s.ok()) {
@@ -353,9 +380,7 @@ Status Binlog::SetProducerStatus(uint32_t pro_num, uint64_t pro_offset) {
     pro_offset = 0;
   }
 
-  if (queue_ != NULL) {
-    delete queue_;
-  }
+  delete queue_;
 
   std::string init_profile = NewFileName(filename, 0);
   if (slash::FileExists(init_profile)) {

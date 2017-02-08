@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include <glog/logging.h>
 #include "pika_heartbeat_conn.h"
 #include "pika_server.h"
@@ -25,8 +30,8 @@ int PikaHeartbeatConn::DealMessage() {
     memcpy(wbuf_ + wbuf_len_, "+OK\r\n", 5);
     wbuf_len_ += 5;
   } else {
-    memcpy(wbuf_ + wbuf_len_, "-ERR What the fuck are u sending\r\n", 35);
-    wbuf_len_ += 35;
+    memcpy(wbuf_ + wbuf_len_, "-ERR What the fuck are u sending\r\n", 34);
+    wbuf_len_ += 34;
   }
   return 0;
 }

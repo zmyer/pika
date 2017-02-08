@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include <glog/logging.h>
 #include "pika_binlog_receiver_thread.h"
 #include "pika_master_conn.h"
@@ -6,8 +11,19 @@
 
 extern PikaServer* g_pika_server;
 
-PikaBinlogReceiverThread::PikaBinlogReceiverThread(int port, int cron_interval) :
-  HolyThread::HolyThread(port, cron_interval),
+PikaBinlogReceiverThread::PikaBinlogReceiverThread(std::string &ip, int port, int cron_interval) :
+  HolyThread::HolyThread(ip, port, cron_interval),
+  thread_querynum_(0),
+  last_thread_querynum_(0),
+  last_time_us_(slash::NowMicros()),
+  last_sec_thread_querynum_(0),
+  serial_(0) {
+  cmds_.reserve(300);
+  InitCmdTable(&cmds_);
+}
+
+PikaBinlogReceiverThread::PikaBinlogReceiverThread(std::set<std::string> &ips, int port, int cron_interval) :
+  HolyThread::HolyThread(ips, port, cron_interval),
   thread_querynum_(0),
   last_thread_querynum_(0),
   last_time_us_(slash::NowMicros()),
@@ -19,7 +35,7 @@ PikaBinlogReceiverThread::PikaBinlogReceiverThread(int port, int cron_interval) 
 
 PikaBinlogReceiverThread::~PikaBinlogReceiverThread() {
     DestoryCmdTable(cmds_);
-    DLOG(INFO) << "BinlogReceiver thread " << thread_id() << " exit!!!";
+    LOG(INFO) << "BinlogReceiver thread " << thread_id() << " exit!!!";
 }
 
 bool PikaBinlogReceiverThread::AccessHandle(std::string& ip) {
@@ -27,7 +43,7 @@ bool PikaBinlogReceiverThread::AccessHandle(std::string& ip) {
     ip = g_pika_server->host();
   }
   if (ThreadClientNum() != 0 || !g_pika_server->ShouldAccessConnAsMaster(ip)) {
-    DLOG(INFO) << "BinlogReceiverThread AccessHandle failed";
+    LOG(WARNING) << "BinlogReceiverThread AccessHandle failed: " << ip;
     return false;
   }
   g_pika_server->PlusMasterConnection();
@@ -71,7 +87,7 @@ void PikaBinlogReceiverThread::KillAll() {
   slash::RWLock l(&rwlock_, true);
   std::map<int, void*>::iterator iter = conns_.begin();
   while (iter != conns_.end()) {
-    DLOG(INFO) << "==========Kill Master Sender Conn==============";
+    LOG(INFO) << "==========Kill Master Sender Conn==============";
     close(iter->first);
     delete(static_cast<PikaMasterConn*>(iter->second));
     iter = conns_.erase(iter);

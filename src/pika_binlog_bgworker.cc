@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include "pika_binlog_bgworker.h"
 #include "pika_server.h"
 #include "pika_conf.h"
@@ -19,17 +24,17 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
   const CmdInfo* const cinfo_ptr = GetCmdInfo(opt);
   Cmd* c_ptr = self->GetCmd(opt);
   if (!cinfo_ptr || !c_ptr) {
-    LOG(ERROR) << "Error operation from binlog: " << opt;
+    LOG(WARNING) << "Error operation from binlog: " << opt;
   }
   c_ptr->res().clear();
 
   // Initial
   c_ptr->Initial(argv, cinfo_ptr);
   if (!c_ptr->res().ok()) {
-    LOG(ERROR) << "Fail to initial command from binlog: " << opt;
+    LOG(WARNING) << "Fail to initial command from binlog: " << opt;
   }
 
-  uint64_t start_us;
+  uint64_t start_us = 0;
   if (g_pika_conf->slowlog_slower_than() >= 0) {
     start_us = slash::NowMicros();
   }
@@ -43,7 +48,7 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
 
   // Add read lock for no suspend command
   if (!cinfo_ptr->is_suspend()) {
-    pthread_rwlock_rdlock(g_pika_server->rwlock());
+    g_pika_server->RWLockReader();
   }
 
   // Force the binlog write option to serialize
@@ -52,7 +57,6 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
   if (!is_readonly) {
     error_happend = !g_pika_server->WaitTillBinlogBGSerial(my_serial);
     if (!error_happend) {
-      DLOG(INFO) << "Write binlog in binlog bgthread thread";
       g_pika_server->logger_->Lock();
       g_pika_server->logger_->Put(bgarg->raw_args);
       g_pika_server->logger_->Unlock();
@@ -65,7 +69,7 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
   }
 
   if (!cinfo_ptr->is_suspend()) {
-    pthread_rwlock_unlock(g_pika_server->rwlock());
+    g_pika_server->RWUnlock();
   }
 
   if (!is_readonly && argv.size() >= 2) {
@@ -74,11 +78,10 @@ void BinlogBGWorker::DoBinlogBG(void* arg) {
   if (g_pika_conf->slowlog_slower_than() >= 0) {
     int64_t duration = slash::NowMicros() - start_us;
     if (duration > g_pika_conf->slowlog_slower_than()) {
-      LOG(ERROR) << "command:" << opt << ", start_time(s): " << start_us / 1000000 << ", duration(us): " << duration;
+      LOG(WARNING) << "command:" << opt << ", start_time(s): " << start_us / 1000000 << ", duration(us): " << duration;
     }
   }
 
-  DLOG(INFO) << "delete argv ptr";
   delete bgarg->argv;
   delete bgarg;
 }

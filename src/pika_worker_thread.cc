@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include <glog/logging.h>
 #include "pika_worker_thread.h"
 #include "pika_conf.h"
@@ -8,7 +13,8 @@ PikaWorkerThread::PikaWorkerThread(int cron_interval):
   WorkerThread::WorkerThread(cron_interval),
   thread_querynum_(0),
   last_thread_querynum_(0),
-  last_time_us_(slash::NowMicros()) {
+  last_time_us_(slash::NowMicros()),
+  last_sec_thread_querynum_(0) {
   cmds_.reserve(300);
   InitCmdTable(&cmds_);
 }
@@ -17,7 +23,7 @@ PikaWorkerThread::~PikaWorkerThread() {
   should_exit_ = true;
   pthread_join(thread_id(), NULL);
   DestoryCmdTable(cmds_);
-  DLOG(INFO) << "A worker thread " << thread_id() << " exit!!!";
+  LOG(INFO) << "A worker thread " << thread_id() << " exit!!!";
 }
 
 void PikaWorkerThread::CronHandle() {
@@ -38,7 +44,7 @@ void PikaWorkerThread::CronHandle() {
  *  Find timeout client
  */
     if (now.tv_sec - static_cast<PikaClientConn*>(iter->second)->last_interaction().tv_sec > g_pika_conf->timeout()) {
-      DLOG(INFO) << "Find Timeout Client: " << static_cast<PikaClientConn*>(iter->second)->ip_port();
+      LOG(INFO) << "Find Timeout Client: " << static_cast<PikaClientConn*>(iter->second)->ip_port();
       AddCronTask(WorkerCronTask{TASK_KILL, static_cast<PikaClientConn*>(iter->second)->ip_port()});
     }
     iter++;
@@ -111,7 +117,6 @@ void PikaWorkerThread::ClientKill(std::string ip_port) {
     if (static_cast<PikaClientConn*>(iter->second)->ip_port() != ip_port) {
       continue;
     }
-    DLOG(INFO) << "==========Kill Client==============";
     close(iter->first);
     delete(static_cast<PikaClientConn*>(iter->second));
     conns_.erase(iter);
@@ -123,19 +128,18 @@ void PikaWorkerThread::ClientKillAll() {
   slash::RWLock l(&rwlock_, true);
   std::map<int, void*>::iterator iter = conns_.begin();
   while (iter != conns_.end()) {
-    DLOG(INFO) << "==========Kill Client==============";
     close(iter->first);
     delete(static_cast<PikaClientConn*>(iter->second));
     iter = conns_.erase(iter);
   }
 }
 
-int64_t PikaWorkerThread::ThreadClientList(std::vector< std::pair<int, std::string> > *clients) {
+int64_t PikaWorkerThread::ThreadClientList(std::vector<ClientInfo> *clients) {
   slash::RWLock l(&rwlock_, false);
   if (clients != NULL) {
     std::map<int, void*>::const_iterator iter = conns_.begin();
     while (iter != conns_.end()) {
-      clients->push_back(make_pair(iter->first, reinterpret_cast<PikaClientConn*>(iter->second)->ip_port()));
+      clients->push_back(ClientInfo{iter->first, reinterpret_cast<PikaClientConn*>(iter->second)->ip_port(), static_cast<int>((reinterpret_cast<PikaClientConn*>(iter->second)->last_interaction()).tv_sec)});
       iter++;
     }
   }

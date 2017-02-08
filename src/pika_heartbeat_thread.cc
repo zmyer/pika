@@ -1,3 +1,8 @@
+// Copyright (c) 2015-present, Qihoo, Inc.  All rights reserved.
+// This source code is licensed under the BSD-style license found in the
+// LICENSE file in the root directory of this source tree. An additional grant
+// of patent rights can be found in the PATENTS file in the same directory.
+
 #include <glog/logging.h>
 #include "pika_heartbeat_thread.h"
 #include "pika_heartbeat_conn.h"
@@ -6,12 +11,16 @@
 
 extern PikaServer* g_pika_server;
 
-PikaHeartbeatThread::PikaHeartbeatThread(int port, int cron_interval) :
-  HolyThread::HolyThread(port, cron_interval) {
+PikaHeartbeatThread::PikaHeartbeatThread(std::string& ip, int port, int cron_interval) :
+  HolyThread::HolyThread(ip, port, cron_interval) {
+}
+
+PikaHeartbeatThread::PikaHeartbeatThread(std::set<std::string>& ips, int port, int cron_interval) :
+  HolyThread::HolyThread(ips, port, cron_interval) {
 }
 
 PikaHeartbeatThread::~PikaHeartbeatThread() {
-  DLOG(INFO) << "PikaHeartbeat thread " << thread_id() << " exit!!!";
+  LOG(INFO) << "PikaHeartbeat thread " << thread_id() << " exit!!!";
 }
 
 void PikaHeartbeatThread::CronHandle() {
@@ -25,7 +34,7 @@ void PikaHeartbeatThread::CronHandle() {
 	std::map<int, void*>::iterator iter = conns_.begin();
   while (iter != conns_.end()) {
     if (now.tv_sec - static_cast<PikaHeartbeatConn*>(iter->second)->last_interaction().tv_sec > 20) {
-      DLOG(INFO) << "Find Timeout Slave: " << static_cast<PikaHeartbeatConn*>(iter->second)->ip_port();
+      LOG(INFO) << "Find Timeout Slave: " << static_cast<PikaHeartbeatConn*>(iter->second)->ip_port();
 			close(iter->first);
 			//	erase item in slaves_
 			g_pika_server->DeleteSlave(iter->first);
@@ -55,7 +64,7 @@ void PikaHeartbeatThread::CronHandle() {
 				//pthread_kill(iter->tid);
         
         // Kill BinlogSender
-        DLOG(INFO) << "Erase slave " << iter->ip_port << " from slaves map of heartbeat thread";
+        LOG(WARNING) << "Erase slave " << iter->ip_port << " from slaves map of heartbeat thread";
         {
         //TODO maybe bug here
         g_pika_server->slave_mutex_.Unlock();
@@ -77,12 +86,12 @@ bool PikaHeartbeatThread::AccessHandle(std::string& ip) {
   std::vector<SlaveItem>::iterator iter = g_pika_server->slaves_.begin();
   while (iter != g_pika_server->slaves_.end()) {
     if (iter->ip_port.find(ip) != std::string::npos) {
-      DLOG(INFO) << "HeartbeatThread access connection " << ip;
+      LOG(INFO) << "HeartbeatThread access connection " << ip;
       return true;
     }
     iter++;
   }
-  DLOG(INFO) << "HeartbeatThread deny connection: " << ip;
+  LOG(WARNING) << "HeartbeatThread deny connection: " << ip;
   return false;
 }
 
