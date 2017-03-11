@@ -8,6 +8,11 @@
 #include "pika_zset.h"
 #include "pika_server.h"
 #include "pika_slot.h"
+#include "../include/pika_server.h"
+#include "../include/pika_zset.h"
+#include "../third/slash/include/slash_string.h"
+#include "../include/pika_command.h"
+#include "../include/pika_slot.h"
 
 extern PikaServer *g_pika_server;
 

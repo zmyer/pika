@@ -9,77 +9,88 @@
 #include <queue>
 #include <set>
 
-#include "holy_thread.h"
-#include "slash_mutex.h"
-#include "env.h"
 #include "pika_define.h"
 #include "pika_master_conn.h"
 #include "pika_command.h"
+#include "../third/pink/include/holy_thread.h"
+#include "../third/slash/include/env.h"
+#include "../third/slash/include/slash_mutex.h"
 
-class PikaBinlogReceiverThread : public pink::HolyThread<PikaMasterConn>
-{
+// TODO: 17/3/3 by zmyer
+class PikaBinlogReceiverThread : public pink::HolyThread<PikaMasterConn> {
 public:
-  PikaBinlogReceiverThread(std::string &ip, int port, int cron_interval = 0);
-  PikaBinlogReceiverThread(std::set<std::string> &ips, int port, int cron_interval = 0);
-  virtual ~PikaBinlogReceiverThread();
-  virtual void CronHandle();
-  virtual bool AccessHandle(std::string& ip);
-  void KillBinlogSender();
+    PikaBinlogReceiverThread(std::string &ip, int port, int cron_interval = 0);
 
-  uint64_t thread_querynum() {
-    slash::RWLock(&rwlock_, false);
-    return thread_querynum_;
-  }
+    PikaBinlogReceiverThread(std::set<std::string> &ips, int port, int cron_interval = 0);
 
-  void ResetThreadQuerynum() {
-    slash::RWLock(&rwlock_, true);
-    thread_querynum_ = 0;
-    last_thread_querynum_ = 0;
-  }
+    virtual ~PikaBinlogReceiverThread();
 
-  uint64_t last_sec_thread_querynum() {
-    slash::RWLock(&rwlock_, false);
-    return last_sec_thread_querynum_;
-  }
+    virtual void CronHandle();
 
-  uint64_t GetnPlusSerial() {
-    return serial_++;
-  }
+    virtual bool AccessHandle(std::string &ip);
 
-  void PlusThreadQuerynum() {
-    slash::RWLock(&rwlock_, true);
-    thread_querynum_++;
-  }
+    void KillBinlogSender();
 
-  void ResetLastSecQuerynum() {
-    uint64_t cur_time_ms = slash::NowMicros();
-    slash::RWLock(&rwlock_, true);
-    last_sec_thread_querynum_ = (thread_querynum_ - last_thread_querynum_) * 1000000 / (cur_time_ms - last_time_us_+1);
-    last_time_us_ = cur_time_ms;
-    last_thread_querynum_ = thread_querynum_;
-  }
+    uint64_t thread_querynum() {
+        slash::RWLock(&rwlock_, false);
+        return thread_querynum_;
+    }
 
-  int32_t ThreadClientNum() {
-    slash::RWLock(&rwlock_, false);
-    int32_t num = conns_.size();
-    return num;
-  }
+    void ResetThreadQuerynum() {
+        slash::RWLock(&rwlock_, true);
+        thread_querynum_ = 0;
+        last_thread_querynum_ = 0;
+    }
 
-  Cmd* GetCmd(const std::string& opt) {
-    return GetCmdFromTable(opt, cmds_);
-  }
+    uint64_t last_sec_thread_querynum() {
+        slash::RWLock(&rwlock_, false);
+        return last_sec_thread_querynum_;
+    }
+
+    uint64_t GetnPlusSerial() {
+        return serial_++;
+    }
+
+    void PlusThreadQuerynum() {
+        slash::RWLock(&rwlock_, true);
+        thread_querynum_++;
+    }
+
+    // TODO: 17/3/3 by zmyer
+    void ResetLastSecQuerynum() {
+        uint64_t cur_time_ms = slash::NowMicros();
+        slash::RWLock(&rwlock_, true);
+        last_sec_thread_querynum_ =
+                (thread_querynum_ - last_thread_querynum_) * 1000000 / (cur_time_ms - last_time_us_ + 1);
+        last_time_us_ = cur_time_ms;
+        last_thread_querynum_ = thread_querynum_;
+    }
+
+    // TODO: 17/3/3 by zmyer
+    int32_t ThreadClientNum() {
+        slash::RWLock(&rwlock_, false);
+        int32_t num = (int32_t) conns_.size();
+        return num;
+    }
+
+    Cmd *GetCmd(const std::string &opt) {
+        return GetCmdFromTable(opt, cmds_);
+    }
 
 private:
-  slash::Mutex mutex_; // protect cron_task_
-  void AddCronTask(WorkerCronTask task);
-  void KillAll();
-  std::queue<WorkerCronTask> cron_tasks_;
+    slash::Mutex mutex_; // protect cron_task_
+    void AddCronTask(WorkerCronTask task);
 
-  std::unordered_map<std::string, Cmd*> cmds_;
-  uint64_t thread_querynum_;
-  uint64_t last_thread_querynum_;
-  uint64_t last_time_us_;
-  uint64_t last_sec_thread_querynum_;
-  uint64_t serial_;
+    void KillAll();
+
+    std::queue<WorkerCronTask> cron_tasks_;
+
+    std::unordered_map<std::string, Cmd *> cmds_;
+    uint64_t thread_querynum_;
+    uint64_t last_thread_querynum_;
+    uint64_t last_time_us_;
+    uint64_t last_sec_thread_querynum_;
+    uint64_t serial_;
 };
+
 #endif

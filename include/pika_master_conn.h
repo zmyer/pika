@@ -6,22 +6,28 @@
 #ifndef PIKA_MASTER_CONN_H_
 #define PIKA_MASTER_CONN_H_
 
-#include "redis_conn.h"
-#include "pink_thread.h"
 #include "pika_command.h"
+#include "../third/pink/include/redis_conn.h"
+#include "../third/pink/include/pink_thread.h"
 
 //class pink::Thread;
 class PikaBinlogReceiverThread;
 
-class PikaMasterConn: public pink::RedisConn {
+// TODO: 17/3/4 by zmyer
+class PikaMasterConn : public pink::RedisConn {
 public:
-  PikaMasterConn(int fd, std::string ip_port, pink::Thread *thread);
-  virtual ~PikaMasterConn();
-  virtual int DealMessage();
+    PikaMasterConn(int fd, std::string ip_port, pink::Thread *thread);
+
+    virtual ~PikaMasterConn();
+
+    virtual int DealMessage();
+
 private:
-  PikaBinlogReceiverThread* self_thread_;
-  void RestoreArgs();
-  std::string raw_args_;
+    PikaBinlogReceiverThread *self_thread_;
+
+    void RestoreArgs();
+
+    std::string raw_args_;
 };
 
 #endif

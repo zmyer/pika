@@ -4,77 +4,78 @@
 // of patent rights can be found in the PATENTS file in the same directory.
 
 #include <vector>
-#include "slash_string.h"
-#include "nemo.h"
-#include "pika_server.h"
-#include "pika_hyperloglog.h"
-
+#include "../include/pika_server.h"
+#include "../include/pika_hyperloglog.h"
+//全局服务器
 extern PikaServer *g_pika_server;
 
-void PfAddCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
-  if (!ptr_info->CheckArg(argv.size())) {
-    res_.SetRes(CmdRes::kWrongNum, kCmdNamePfAdd);
-    return;
-  }
-  key_ = argv[1];
-  size_t pos = 2;
-  while (pos < argv.size()) {
-    values_.push_back(argv[pos++]);
-  }
+// TODO: 17/3/5 by zmyer
+void PfAddCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
+    if (!ptr_info->CheckArg(argv.size())) {
+        res_.SetRes(CmdRes::kWrongNum, kCmdNamePfAdd);
+        return;
+    }
+    key_ = argv[1];
+    size_t pos = 2;
+    while (pos < argv.size()) {
+        values_.push_back(argv[pos++]);
+    }
 }
 
+// TODO: 17/3/5 by zmyer
 void PfAddCmd::Do() {
-  nemo::Status s;
-  bool update = false;
-  s = g_pika_server->db()->PfAdd(key_, values_, update);
-  if (s.ok() && update) {
-    res_.AppendInteger(1);
-  } else if (s.ok() && !update) {
-    res_.AppendInteger(0);
-  } else {
-    res_.SetRes(CmdRes::kErrOther, s.ToString());
-  }
+    nemo::Status s;
+    bool update = false;
+    s = g_pika_server->db()->PfAdd(key_, values_, update);
+    if (s.ok() && update) {
+        res_.AppendInteger(1);
+    } else if (s.ok() && !update) {
+        res_.AppendInteger(0);
+    } else {
+        res_.SetRes(CmdRes::kErrOther, s.ToString());
+    }
 }
 
-void PfCountCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
-  if (!ptr_info->CheckArg(argv.size())) {
-    res_.SetRes(CmdRes::kWrongNum, kCmdNamePfCount);
-    return;
-  }
-  size_t pos = 1;
-  while (pos < argv.size()) {
-    keys_.push_back(argv[pos++]);
-  }
+// TODO: 17/3/5 by zmyer
+void PfCountCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
+    if (!ptr_info->CheckArg((int) argv.size())) {
+        res_.SetRes(CmdRes::kWrongNum, kCmdNamePfCount);
+        return;
+    }
+    size_t pos = 1;
+    while (pos < argv.size()) {
+        keys_.push_back(argv[pos++]);
+    }
 }
 
 void PfCountCmd::Do() {
-  nemo::Status s;
-  int value_;
-  s = g_pika_server->db()->PfCount(keys_, value_);
-  if (s.ok()) {
-    res_.AppendInteger(value_);
-  } else {
-    res_.SetRes(CmdRes::kErrOther, s.ToString());
-  }
+    nemo::Status s;
+    int value_;
+    s = g_pika_server->db()->PfCount(keys_, value_);
+    if (s.ok()) {
+        res_.AppendInteger(value_);
+    } else {
+        res_.SetRes(CmdRes::kErrOther, s.ToString());
+    }
 }
 
-void PfMergeCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
-  if (!ptr_info->CheckArg(argv.size())) {
-    res_.SetRes(CmdRes::kWrongNum, kCmdNamePfMerge);
-    return;
-  }
-  size_t pos = 1;
-  while (pos < argv.size()) {
-    keys_.push_back(argv[pos++]);
-  }
+void PfMergeCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
+    if (!ptr_info->CheckArg((int) argv.size())) {
+        res_.SetRes(CmdRes::kWrongNum, kCmdNamePfMerge);
+        return;
+    }
+    size_t pos = 1;
+    while (pos < argv.size()) {
+        keys_.push_back(argv[pos++]);
+    }
 }
 
 void PfMergeCmd::Do() {
-  nemo::Status s;
-  s = g_pika_server->db()->PfMerge(keys_);
-  if (s.ok()) {
-    res_.SetRes(CmdRes::kOk);
-  } else {
-    res_.SetRes(CmdRes::kErrOther, s.ToString());
-  }
+    nemo::Status s;
+    s = g_pika_server->db()->PfMerge(keys_);
+    if (s.ok()) {
+        res_.SetRes(CmdRes::kOk);
+    } else {
+        res_.SetRes(CmdRes::kErrOther, s.ToString());
+    }
 }

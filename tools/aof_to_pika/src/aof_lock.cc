@@ -2,13 +2,11 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
-
-#include "aof_lock.h"
-
+#include "../include/aof_lock.h"
 
 static void PthreadCall(const std::string &label, int result) {
     if (result != 0) {
-        std::cout << "pthread " << label << " : " <<  result << std::endl;
+        std::cout << "pthread " << label << " : " << result << std::endl;
         abort();
     }
 }
@@ -21,10 +19,10 @@ void Mutex::Lock() { PthreadCall("lock", pthread_mutex_lock(&mu_)); }
 
 void Mutex::Unlock() { PthreadCall("unlock", pthread_mutex_unlock(&mu_)); }
 
-CondVar::CondVar(Mutex* mu)
-    : mu_(mu) {
-        PthreadCall("init cv", pthread_cond_init(&cv_, NULL));
-    }
+CondVar::CondVar(Mutex *mu)
+        : mu_(mu) {
+    PthreadCall("init cv", pthread_cond_init(&cv_, NULL));
+}
 
 CondVar::~CondVar() { PthreadCall("destroy cv", pthread_cond_destroy(&cv_)); }
 

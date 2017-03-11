@@ -3,11 +3,11 @@
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
 
-#include "slash_string.h"
-#include "nemo.h"
-#include "pika_conf.h"
-#include "pika_slot.h"
-#include "pika_server.h"
+#include "../include/pika_server.h"
+#include "../include/pika_conf.h"
+#include "../include/pika_slot.h"
+#include "../third/glog/src/glog/log_severity.h"
+#include "../third/glog/src/windows/glog/logging.h"
 
 #define min(a, b)  (((a) > (b)) ? (b) : (a))
 
@@ -15,11 +15,13 @@ extern PikaServer *g_pika_server;
 extern PikaConf *g_pika_conf;
 
 uint32_t crc32tab[256];
+
+// TODO: 17/3/2 by zmyer
 void CRC32TableInit(uint32_t poly) {
     int i, j;
-    for (i = 0; i < 256; i ++) {
-        uint32_t crc = i;
-        for (j = 0; j < 8; j ++) {
+    for (i = 0; i < 256; i++) {
+        uint32_t crc = (uint32_t) i;
+        for (j = 0; j < 8; j++) {
             if (crc & 1) {
                 crc = (crc >> 1) ^ poly;
             } else {
@@ -30,6 +32,7 @@ void CRC32TableInit(uint32_t poly) {
     }
 }
 
+// TODO: 17/3/2 by zmyer
 void InitCRC32Table() {
     CRC32TableInit(IEEE_POLY);
 }
@@ -37,28 +40,28 @@ void InitCRC32Table() {
 uint32_t CRC32Update(uint32_t crc, const char *buf, int len) {
     int i;
     crc = ~crc;
-    for (i = 0; i < len; i ++) {
-        crc = crc32tab[(uint8_t)((char)crc ^ buf[i])] ^ (crc >> 8);
+    for (i = 0; i < len; i++) {
+        crc = crc32tab[(uint8_t) ((char) crc ^ buf[i])] ^ (crc >> 8);
     }
     return ~crc;
 }
 
 // get key slot number
 int SlotNum(const std::string &str) {
-    uint32_t crc = CRC32Update(0, str.data(), (int)str.size());
-    return (int)(crc & HASH_SLOTS_MASK);
+    uint32_t crc = CRC32Update(0, str.data(), (int) str.size());
+    return (int) (crc & HASH_SLOTS_MASK);
 }
 
 // add key to slotkey
 void SlotKeyAdd(const std::string type, const std::string key) {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         return;
     }
     int64_t res = 0;
-    std::string slotKey = SlotKeyPrefix + std::to_string(SlotNum(key)); 
-    nemo::Status s = g_pika_server->db()->SAdd(slotKey, type+key, &res);
+    std::string slotKey = SlotKeyPrefix + std::to_string(SlotNum(key));
+    nemo::Status s = g_pika_server->db()->SAdd(slotKey, type + key, &res);
     if (!s.ok()) {
-        LOG(WARNING) << "Zadd key: " << key <<" to slotKey, error: " <<strerror(errno);
+        LOG(WARNING) << "Zadd key: " << key << " to slotKey, error: " << strerror(errno);
     }
 }
 
@@ -66,22 +69,22 @@ int KeyType(const std::string key, std::string &key_type) {
     std::string type_str;
     nemo::Status s = g_pika_server->db()->Type(key, &type_str);
     if (!s.ok()) {
-        LOG(WARNING) << "Get key type error: "<< key <<" " <<strerror(errno);
+        LOG(WARNING) << "Get key type error: " << key << " " << strerror(errno);
         key_type = "";
-        return -1; 
+        return -1;
     }
-    if (type_str=="string"){
+    if (type_str == "string") {
         key_type = "k";
-    }else if (type_str=="hash"){
+    } else if (type_str == "hash") {
         key_type = "h";
-    }else if (type_str=="list"){
+    } else if (type_str == "list") {
         key_type = "l";
-    }else if (type_str=="set"){
+    } else if (type_str == "set") {
         key_type = "s";
-    }else if (type_str=="zset"){
+    } else if (type_str == "zset") {
         key_type = "z";
-    }else{
-        LOG(WARNING) << "Get key type error: "<< key <<" " <<strerror(errno);
+    } else {
+        LOG(WARNING) << "Get key type error: " << key << " " << strerror(errno);
         key_type = "";
         return -1;
     }
@@ -90,26 +93,26 @@ int KeyType(const std::string key, std::string &key_type) {
 
 //del key from slotkey
 void SlotKeyRem(const std::string key) {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         return;
     }
     std::string type;
-    if (KeyType(key, type) < 0){
-        LOG(WARNING) << "Zrem key: " << key <<" from slotKey, error: " <<strerror(errno);
+    if (KeyType(key, type) < 0) {
+        LOG(WARNING) << "Zrem key: " << key << " from slotKey, error: " << strerror(errno);
         return;
     }
-    std::string slotKey = SlotKeyPrefix + std::to_string(SlotNum(key)); 
+    std::string slotKey = SlotKeyPrefix + std::to_string(SlotNum(key));
     int64_t count;
-    nemo::Status s = g_pika_server->db()->SRem(slotKey, type+key, &count);
+    nemo::Status s = g_pika_server->db()->SRem(slotKey, type + key, &count);
     if (!s.ok()) {
-        LOG(WARNING) << "Zrem key: " << key <<" from slotKey, error: " <<strerror(errno);
+        LOG(WARNING) << "Zrem key: " << key << " from slotKey, error: " << strerror(errno);
         return;
     }
 }
 
 //check key exists
 void KeyNotExistsRem(const std::string type, const std::string key) {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         return;
     }
     int64_t res = -1;
@@ -117,10 +120,10 @@ void KeyNotExistsRem(const std::string type, const std::string key) {
     vkeys.push_back(key);
     nemo::Status s = g_pika_server->db()->Exists(vkeys, &res);
     if (res == 0) {
-        std::string slotKey = SlotKeyPrefix + std::to_string(SlotNum(key)); 
-        nemo::Status s = g_pika_server->db()->SRem(slotKey, type+key, &res);
+        std::string slotKey = SlotKeyPrefix + std::to_string(SlotNum(key));
+        nemo::Status s = g_pika_server->db()->SRem(slotKey, type + key, &res);
         if (!s.ok()) {
-            LOG(WARNING) << "Zrem key: " << key <<" from slotKey, error: " <<strerror(errno);
+            LOG(WARNING) << "Zrem key: " << key << " from slotKey, error: " << strerror(errno);
             return;
         }
     }
@@ -128,7 +131,8 @@ void KeyNotExistsRem(const std::string type, const std::string key) {
 }
 
 //do migrate key to dest pika server
-static int doMigrate(pink::RedisCli *cli, const std::string dest_ip, const int64_t dest_port, const std::string send_str){
+static int doMigrate(pink::RedisCli *cli, const std::string dest_ip, const int64_t dest_port,
+                     const std::string send_str) {
     cli->set_connect_timeout(3000);
     if ((cli->Connect(dest_ip, dest_port, g_pika_server->host())).ok()) {
         cli->set_send_timeout(30000);
@@ -148,62 +152,62 @@ static int doMigrate(pink::RedisCli *cli, const std::string dest_ip, const int64
         pink::Status s;
         s = cli->Send(&wbuf_str);
         if (!s.ok()) {
-            LOG(WARNING) << "slotKvMigrate Send error: " <<strerror(errno);
+            LOG(WARNING) << "slotKvMigrate Send error: " << strerror(errno);
             return -1;
         }
 
         cli->Close();
-    } else  {
-        LOG(WARNING) << "slotKvMigrate Connect destination error: " <<strerror(errno);
+    } else {
+        LOG(WARNING) << "slotKvMigrate Connect destination error: " << strerror(errno);
         return -1;
     }
     return 0;
 }
 
 // get kv key value
-static int kvGet(const std::string key, std::string &value){
+static int kvGet(const std::string key, std::string &value) {
     nemo::Status s = g_pika_server->db()->Get(key, &value);
     if (!s.ok()) {
         if (s.IsNotFound()) {
             value = "";
-            LOG(WARNING) << "Get kv key: "<< key <<" not found ";
+            LOG(WARNING) << "Get kv key: " << key << " not found ";
             return 0;
         } else {
             value = "";
-            LOG(WARNING) << "Get kv key: "<< key <<" error: " <<strerror(errno);
+            LOG(WARNING) << "Get kv key: " << key << " error: " << strerror(errno);
             return -1;
         }
-    } 
+    }
     return 0;
 }
 
 // delete key from db
-static int keyDel(const std::string key){
+static int keyDel(const std::string key) {
     int64_t count = 0;
     nemo::Status s = g_pika_server->db()->Del(key, &count);
     if (!s.ok()) {
         if (s.IsNotFound()) {
-            LOG(WARNING) << "Del key: "<< key <<" not found ";
+            LOG(WARNING) << "Del key: " << key << " not found ";
             return 0;
         } else {
-            LOG(WARNING) << "Del key: "<< key <<" error: " <<strerror(errno);
+            LOG(WARNING) << "Del key: " << key << " error: " << strerror(errno);
             return -1;
         }
     }
     return 1;
 }
 
-static int migrateKeyTTl(pink::RedisCli *cli, std::string dest_ip, const int64_t dest_port, const std::string key){
+static int migrateKeyTTl(pink::RedisCli *cli, std::string dest_ip, const int64_t dest_port, const std::string key) {
     int64_t ttl = 0;
     pink::RedisCmdArgsType argv;
     std::string send_str;
     nemo::Status s = g_pika_server->db()->TTL(key, &ttl);
-    if (s.ok() && (ttl > 0)){
+    if (s.ok() && (ttl > 0)) {
         argv.push_back("expire");
         argv.push_back(key);
         argv.push_back(std::to_string(ttl));
         pink::RedisCli::SerializeCommand(argv, &send_str);
-        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0){
+        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0) {
             return -1;
         }
 
@@ -212,13 +216,13 @@ static int migrateKeyTTl(pink::RedisCli *cli, std::string dest_ip, const int64_t
 }
 
 // migrate one kv key
-static int migrateKv(const std::string dest_ip, const int64_t dest_port, const std::string key){
+static int migrateKv(const std::string dest_ip, const int64_t dest_port, const std::string key) {
     std::string value;
-    if (kvGet(key, value) < 0){
-      return -1;
+    if (kvGet(key, value) < 0) {
+        return -1;
     }
-    if (value==""){
-      return 0;
+    if (value == "") {
+        return 0;
     }
 
     pink::RedisCli *cli = new pink::RedisCli();
@@ -229,11 +233,11 @@ static int migrateKv(const std::string dest_ip, const int64_t dest_port, const s
     argv.push_back(value);
     pink::RedisCli::SerializeCommand(argv, &send_str);
 
-    if (doMigrate(cli, dest_ip, dest_port, send_str) < 0){
-      return -1;
+    if (doMigrate(cli, dest_ip, dest_port, send_str) < 0) {
+        return -1;
     }
 
-    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0){
+    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0) {
         return -1;
     }
 
@@ -243,14 +247,14 @@ static int migrateKv(const std::string dest_ip, const int64_t dest_port, const s
 }
 
 //get all hash field and values
-static int hashGetall(const std::string key, std::vector<nemo::FV> &fvs){
+static int hashGetall(const std::string key, std::vector<nemo::FV> &fvs) {
     nemo::Status s = g_pika_server->db()->HGetall(key, fvs);
     if (!s.ok()) {
         if (s.IsNotFound()) {
-            LOG(WARNING) << "HGetall key: "<< key <<" not found ";
+            LOG(WARNING) << "HGetall key: " << key << " not found ";
             return 0;
         } else {
-            LOG(WARNING) << "HGetall key: "<< key <<" error: " <<strerror(errno);
+            LOG(WARNING) << "HGetall key: " << key << " error: " << strerror(errno);
             return -1;
         }
     }
@@ -258,38 +262,39 @@ static int hashGetall(const std::string key, std::vector<nemo::FV> &fvs){
 }
 
 // migrate one hash key
-static int migrateHash(const std::string dest_ip, const int64_t dest_port, const std::string key){
+static int migrateHash(const std::string dest_ip, const int64_t dest_port, const std::string key) {
     std::vector<nemo::FV> fvs;
-    if (hashGetall(key, fvs) < 0){
+    if (hashGetall(key, fvs) < 0) {
         return -1;
     }
     size_t keySize = fvs.size();
-    if (keySize==0){
+    if (keySize == 0) {
         return 0;
     }
 
     pink::RedisCli *cli = new pink::RedisCli();
     pink::RedisCmdArgsType argv;
     std::string send_str;
-    for (size_t i = 0; i <= keySize/MaxKeySendSize; ++i){
-        if (0 < i){
-            LOG(WARNING) << "Migrate big key: "<< key <<" size: " << keySize << " migrated value: " << min((i+1)*MaxKeySendSize, keySize);
+    for (size_t i = 0; i <= keySize / MaxKeySendSize; ++i) {
+        if (0 < i) {
+            LOG(WARNING) << "Migrate big key: " << key << " size: " << keySize << " migrated value: " <<
+            min((i + 1) * MaxKeySendSize, keySize);
         }
         argv.clear();
         send_str = "";
         argv.push_back("hmset");
         argv.push_back(key);
-        for (size_t j = i*MaxKeySendSize; j < (i+1)*MaxKeySendSize && j < keySize; ++j){
+        for (size_t j = i * MaxKeySendSize; j < (i + 1) * MaxKeySendSize && j < keySize; ++j) {
             argv.push_back(fvs[j].field);
             argv.push_back(fvs[j].val);
         }
         pink::RedisCli::SerializeCommand(argv, &send_str);
-        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0){
+        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0) {
             return -1;
         }
     }
 
-    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0){
+    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0) {
         return -1;
     }
 
@@ -299,14 +304,14 @@ static int migrateHash(const std::string dest_ip, const int64_t dest_port, const
 }
 
 // get list key all values
-static int listGetall(const std::string key, std::vector<nemo::IV> &ivs){
+static int listGetall(const std::string key, std::vector<nemo::IV> &ivs) {
     nemo::Status s = g_pika_server->db()->LRange(key, 0, -1, ivs);
     if (!s.ok()) {
         if (s.IsNotFound()) {
-            LOG(WARNING) << "List get key: "<< key <<" value not found ";
+            LOG(WARNING) << "List get key: " << key << " value not found ";
             return 0;
         } else {
-            LOG(WARNING) << "List get key: "<< key <<" value error: " <<strerror(errno);
+            LOG(WARNING) << "List get key: " << key << " value error: " << strerror(errno);
             return -1;
         }
     }
@@ -314,37 +319,38 @@ static int listGetall(const std::string key, std::vector<nemo::IV> &ivs){
 }
 
 // migrate one list key
-static int migrateList(const std::string dest_ip, const int64_t dest_port, const std::string key){
+static int migrateList(const std::string dest_ip, const int64_t dest_port, const std::string key) {
     std::vector<nemo::IV> ivs;
-    if (listGetall(key, ivs) < 0){
+    if (listGetall(key, ivs) < 0) {
         return -1;
     }
     size_t keySize = ivs.size();
-    if (keySize==0){
+    if (keySize == 0) {
         return 0;
     }
 
     pink::RedisCli *cli = new pink::RedisCli();
     pink::RedisCmdArgsType argv;
     std::string send_str;
-    for (size_t i = 0; i <= keySize/MaxKeySendSize; ++i){
-        if (0 < i){
-            LOG(WARNING) << "Migrate big key: "<< key <<" size: " << keySize << " migrated value: " << min((i+1)*MaxKeySendSize, keySize);
+    for (size_t i = 0; i <= keySize / MaxKeySendSize; ++i) {
+        if (0 < i) {
+            LOG(WARNING) << "Migrate big key: " << key << " size: " << keySize << " migrated value: " <<
+            min((i + 1) * MaxKeySendSize, keySize);
         }
         argv.clear();
         send_str = "";
         argv.push_back("lpush");
         argv.push_back(key);
-        for (size_t j = i*MaxKeySendSize; j < (i+1)*MaxKeySendSize && j < keySize; ++j){
+        for (size_t j = i * MaxKeySendSize; j < (i + 1) * MaxKeySendSize && j < keySize; ++j) {
             argv.push_back(ivs[j].val);
         }
         pink::RedisCli::SerializeCommand(argv, &send_str);
-        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0){
+        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0) {
             return -1;
         }
     }
 
-    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0){
+    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0) {
         return -1;
     }
 
@@ -354,14 +360,14 @@ static int migrateList(const std::string dest_ip, const int64_t dest_port, const
 }
 
 // get set key all values
-static int setGetall(const std::string key, std::vector<std::string> &members){
+static int setGetall(const std::string key, std::vector<std::string> &members) {
     nemo::Status s = g_pika_server->db()->SMembers(key, members);
     if (!s.ok()) {
         if (s.IsNotFound()) {
-            LOG(WARNING) << "Set get key: "<< key <<" value not found ";
+            LOG(WARNING) << "Set get key: " << key << " value not found ";
             return 0;
         } else {
-            LOG(WARNING) << "Set get key: "<< key <<" value error: " <<strerror(errno);
+            LOG(WARNING) << "Set get key: " << key << " value error: " << strerror(errno);
             return -1;
         }
     }
@@ -369,37 +375,38 @@ static int setGetall(const std::string key, std::vector<std::string> &members){
 }
 
 // migrate one set key
-static int migrateSet(const std::string dest_ip, const int64_t dest_port, const std::string key){
+static int migrateSet(const std::string dest_ip, const int64_t dest_port, const std::string key) {
     std::vector<std::string> members;
-    if (setGetall(key, members) < 0){
+    if (setGetall(key, members) < 0) {
         return -1;
     }
     size_t keySize = members.size();
-    if (keySize==0){
+    if (keySize == 0) {
         return 0;
     }
 
     pink::RedisCli *cli = new pink::RedisCli();
     pink::RedisCmdArgsType argv;
     std::string send_str;
-    for (size_t i = 0; i <= keySize/MaxKeySendSize; ++i){
-        if (0 < i){
-            LOG(WARNING) << "Migrate big key: "<< key <<" size: " << keySize << " migrated value: " << min((i+1)*MaxKeySendSize, keySize);
+    for (size_t i = 0; i <= keySize / MaxKeySendSize; ++i) {
+        if (0 < i) {
+            LOG(WARNING) << "Migrate big key: " << key << " size: " << keySize << " migrated value: " <<
+            min((i + 1) * MaxKeySendSize, keySize);
         }
         argv.clear();
         send_str = "";
         argv.push_back("sadd");
         argv.push_back(key);
-        for (size_t j = i*MaxKeySendSize; j < (i+1)*MaxKeySendSize && j < keySize; ++j){
+        for (size_t j = i * MaxKeySendSize; j < (i + 1) * MaxKeySendSize && j < keySize; ++j) {
             argv.push_back(members[j]);
         }
         pink::RedisCli::SerializeCommand(argv, &send_str);
-        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0){
+        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0) {
             return -1;
         }
     }
 
-    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0){
+    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0) {
         return -1;
     }
 
@@ -409,14 +416,14 @@ static int migrateSet(const std::string dest_ip, const int64_t dest_port, const 
 }
 
 // get one zset key all values
-static int zsetGetall(const std::string key, std::vector<nemo::SM> &sms){
+static int zsetGetall(const std::string key, std::vector<nemo::SM> &sms) {
     nemo::Status s = g_pika_server->db()->ZRange(key, 0, -1, sms);
     if (!s.ok()) {
         if (s.IsNotFound()) {
-            LOG(WARNING) << "zset get key: "<< key <<" not found ";
+            LOG(WARNING) << "zset get key: " << key << " not found ";
             return 0;
         } else {
-            LOG(WARNING) << "zset get key: "<< key <<" value error: " <<strerror(errno);
+            LOG(WARNING) << "zset get key: " << key << " value error: " << strerror(errno);
             return -1;
         }
     }
@@ -424,38 +431,39 @@ static int zsetGetall(const std::string key, std::vector<nemo::SM> &sms){
 }
 
 // migrate zset key
-static int migrateZset(const std::string dest_ip, const int64_t dest_port, const std::string key){
+static int migrateZset(const std::string dest_ip, const int64_t dest_port, const std::string key) {
     std::vector<nemo::SM> sms;
-    if (zsetGetall(key, sms) < 0){
+    if (zsetGetall(key, sms) < 0) {
         return -1;
     }
     size_t keySize = sms.size();
-    if (keySize==0){
+    if (keySize == 0) {
         return 0;
     }
 
     pink::RedisCli *cli = new pink::RedisCli();
     pink::RedisCmdArgsType argv;
     std::string send_str;
-    for (size_t i = 0; i <= keySize/MaxKeySendSize; ++i){
-        if (0 < i){
-            LOG(WARNING) << "Migrate big key: "<< key <<" size: " << keySize << " migrated value: " << min((i+1)*MaxKeySendSize, keySize);
+    for (size_t i = 0; i <= keySize / MaxKeySendSize; ++i) {
+        if (0 < i) {
+            LOG(WARNING) << "Migrate big key: " << key << " size: " << keySize << " migrated value: " <<
+            min((i + 1) * MaxKeySendSize, keySize);
         }
         argv.clear();
         send_str = "";
         argv.push_back("zadd");
         argv.push_back(key);
-        for (size_t j = i*MaxKeySendSize; j < (i+1)*MaxKeySendSize && j < keySize; ++j){
+        for (size_t j = i * MaxKeySendSize; j < (i + 1) * MaxKeySendSize && j < keySize; ++j) {
             argv.push_back(std::to_string(sms[j].score));
             argv.push_back(sms[j].member);
         }
         pink::RedisCli::SerializeCommand(argv, &send_str);
-        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0){
+        if (doMigrate(cli, dest_ip, dest_port, send_str) < 0) {
             return -1;
         }
     }
 
-    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0){
+    if (migrateKeyTTl(cli, dest_ip, dest_port, key) < 0) {
         return -1;
     }
 
@@ -465,38 +473,39 @@ static int migrateZset(const std::string dest_ip, const int64_t dest_port, const
 }
 
 // migrate key
-static int MigrateOneKey(const std::string dest_ip, const int64_t dest_port, const std::string key, const char key_type, CmdRes& res){
+static int MigrateOneKey(const std::string dest_ip, const int64_t dest_port, const std::string key, const char key_type,
+                         CmdRes &res) {
     switch (key_type) {
         case 'k':
-            if (migrateKv(dest_ip, dest_port, key) < 0){
+            if (migrateKv(dest_ip, dest_port, key) < 0) {
                 SlotKeyAdd("k", key);
                 res.SetRes(CmdRes::kErrOther, "migrate slot error");
                 return -1;
             }
             break;
         case 'h':
-            if (migrateHash(dest_ip, dest_port, key) < 0){
+            if (migrateHash(dest_ip, dest_port, key) < 0) {
                 SlotKeyAdd("h", key);
                 res.SetRes(CmdRes::kErrOther, "migrate slot error");
                 return -1;
             }
             break;
         case 'l':
-            if (migrateList(dest_ip, dest_port, key) < 0){
+            if (migrateList(dest_ip, dest_port, key) < 0) {
                 SlotKeyAdd("l", key);
                 res.SetRes(CmdRes::kErrOther, "migrate slot error");
                 return -1;
             }
             break;
         case 's':
-            if (migrateSet(dest_ip, dest_port, key) < 0){
+            if (migrateSet(dest_ip, dest_port, key) < 0) {
                 SlotKeyAdd("s", key);
                 res.SetRes(CmdRes::kErrOther, "migrate slot error");
                 return -1;
             }
             break;
         case 'z':
-            if (migrateZset(dest_ip, dest_port, key) < 0){
+            if (migrateZset(dest_ip, dest_port, key) < 0) {
                 SlotKeyAdd("z", key);
                 res.SetRes(CmdRes::kErrOther, "migrate slot error");
                 return -1;
@@ -511,9 +520,9 @@ static int MigrateOneKey(const std::string dest_ip, const int64_t dest_port, con
 }
 
 // check slotkey remaind keys number
-static void SlotKeyLenCheck(const std::string slotKey, CmdRes& res){
-    int len = g_pika_server->db()->SCard(slotKey);
-    if (len < 0){
+static void SlotKeyLenCheck(const std::string slotKey, CmdRes &res) {
+    int len = (int) g_pika_server->db()->SCard(slotKey);
+    if (len < 0) {
         res.SetRes(CmdRes::kErrOther, "migrate slot kv error");
         res.AppendArrayLen(2);
         res.AppendInteger(1);
@@ -526,8 +535,8 @@ static void SlotKeyLenCheck(const std::string slotKey, CmdRes& res){
     return;
 }
 
-void SlotsMgrtTagSlotCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
-    if (!ptr_info->CheckArg(argv.size())) {
+void SlotsMgrtTagSlotCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
+    if (!ptr_info->CheckArg((int) argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsMgrtTagSlot);
         return;
     }
@@ -559,13 +568,13 @@ void SlotsMgrtTagSlotCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const 
 }
 
 // get and del one key from slotkey
-int SlotsMgrtTagSlotCmd::SlotKeyPop(){
-    std::string slotKey = SlotKeyPrefix+std::to_string(slot_num_);
+int SlotsMgrtTagSlotCmd::SlotKeyPop() {
+    std::string slotKey = SlotKeyPrefix + std::to_string(slot_num_);
     std::string tkey;
     nemo::SIterator *iter = g_pika_server->db()->SScan(slotKey, 1);
     if (!iter->Valid()) {
         delete iter;
-        LOG(INFO) << "Migrate slot: "<< slot_num_ <<" not found ";
+        LOG(INFO) << "Migrate slot: " << slot_num_ << " not found ";
         res_.AppendArrayLen(2);
         res_.AppendInteger(0);
         res_.AppendInteger(0);
@@ -580,30 +589,30 @@ int SlotsMgrtTagSlotCmd::SlotKeyPop(){
     int64_t count;
     nemo::Status s = g_pika_server->db()->SRem(slotKey, tkey, &count);
     if (!s.ok()) {
-        LOG(WARNING) << "Zrem key: " << key_ <<" from slotKey, error: " <<strerror(errno);
+        LOG(WARNING) << "Zrem key: " << key_ << " from slotKey, error: " << strerror(errno);
     }
     return 0;
 }
 
 void SlotsMgrtTagSlotCmd::Do() {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         LOG(WARNING) << "Not in slotmigrate mode";
         res_.SetRes(CmdRes::kErrOther, "not set slotmigrate");
         return;
     }
-    if (SlotKeyPop() < 0){
-      return;
+    if (SlotKeyPop() < 0) {
+        return;
     }
-    if (MigrateOneKey(dest_ip_, dest_port_, key_, key_type_, res_) < 0){
-      return;
+    if (MigrateOneKey(dest_ip_, dest_port_, key_, key_type_, res_) < 0) {
+        return;
     }
-    std::string slotKey = SlotKeyPrefix+std::to_string(slot_num_);
+    std::string slotKey = SlotKeyPrefix + std::to_string(slot_num_);
     SlotKeyLenCheck(slotKey, res_);
     return;
 }
 
-void SlotsMgrtTagOneCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
-    if (!ptr_info->CheckArg(argv.size())) {
+void SlotsMgrtTagOneCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
+    if (!ptr_info->CheckArg((int) argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsMgrtTagOne);
         return;
     }
@@ -611,18 +620,21 @@ void SlotsMgrtTagOneCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const p
     dest_ip_ = slash::StringToLower(*it++);
 
     std::string str_dest_port = *it++;
-    if (!slash::string2l(str_dest_port.data(), str_dest_port.size(), &dest_port_) || dest_port_ <= 0) {
+    if (!slash::string2l(str_dest_port.data(), str_dest_port.size(), (long *) &dest_port_)
+        || dest_port_ <= 0) {
         res_.SetRes(CmdRes::kInvalidInt);
         return;
     }
 
-    if ((dest_ip_ == "127.0.0.1" || dest_ip_ == g_pika_server->host()) && dest_port_ == g_pika_server->port()) {
+    if ((dest_ip_ == "127.0.0.1" || dest_ip_ == g_pika_server->host())
+        && dest_port_ == g_pika_server->port()) {
         res_.SetRes(CmdRes::kErrOther, "destination address error");
         return;
     }
 
     std::string str_timeout_ms = *it++;
-    if (!slash::string2l(str_timeout_ms.data(), str_timeout_ms.size(), &timeout_ms_) || timeout_ms_ <= 0) {
+    if (!slash::string2l(str_timeout_ms.data(), str_timeout_ms.size(), (long *) &timeout_ms_)
+        || timeout_ms_ <= 0) {
         res_.SetRes(CmdRes::kInvalidInt);
         return;
     }
@@ -638,26 +650,26 @@ int SlotsMgrtTagOneCmd::KeyTypeCheck() {
     nemo::Status s = g_pika_server->db()->Type(key_, &type_str);
     if (!s.ok()) {
         if (s.IsNotFound()) {
-            LOG(INFO) << "Migrate slot key "<< key_ <<" not found";
+            LOG(INFO) << "Migrate slot key " << key_ << " not found";
             res_.AppendInteger(0);
         } else {
-            LOG(WARNING) << "Migrate slot key: "<< key_ <<" error: " <<strerror(errno);
+            LOG(WARNING) << "Migrate slot key: " << key_ << " error: " << strerror(errno);
             res_.SetRes(CmdRes::kErrOther, "migrate slot error");
         }
-        return -1; 
+        return -1;
     }
-    if (type_str=="string"){
+    if (type_str == "string") {
         key_type_ = 'k';
-    }else if (type_str=="hash"){
+    } else if (type_str == "hash") {
         key_type_ = 'h';
-    }else if (type_str=="list"){
+    } else if (type_str == "list") {
         key_type_ = 'l';
-    }else if (type_str=="set"){
+    } else if (type_str == "set") {
         key_type_ = 's';
-    }else if (type_str=="zset"){
+    } else if (type_str == "zset") {
         key_type_ = 'z';
-    }else{
-        LOG(WARNING) << "Migrate slot key: "<<key_ <<" not found";
+    } else {
+        LOG(WARNING) << "Migrate slot key: " << key_ << " not found";
         res_.AppendInteger(0);
         return -1;
     }
@@ -665,17 +677,17 @@ int SlotsMgrtTagOneCmd::KeyTypeCheck() {
 }
 
 // delete one key from slotkey
-int SlotsMgrtTagOneCmd::SlotKeyRemCheck(){
-    std::string slotKey = SlotKeyPrefix+std::to_string(slot_num_);
-    std::string tkey = std::string(1,key_type_) + key_;
+int SlotsMgrtTagOneCmd::SlotKeyRemCheck() {
+    std::string slotKey = SlotKeyPrefix + std::to_string(slot_num_);
+    std::string tkey = std::string(1, key_type_) + key_;
     int64_t count;
     nemo::Status s = g_pika_server->db()->SRem(slotKey, tkey, &count);
     if (!s.ok()) {
         if (s.IsNotFound()) {
-            LOG(INFO) << "Migrate slot: "<< slot_num_ <<" not found ";
+            LOG(INFO) << "Migrate slot: " << slot_num_ << " not found ";
             res_.AppendInteger(0);
         } else {
-            LOG(WARNING) << "Migrate slot key: "<< key_ <<" error: " <<strerror(errno);
+            LOG(WARNING) << "Migrate slot key: " << key_ << " error: " << strerror(errno);
             res_.SetRes(CmdRes::kErrOther, "migrate slot error");
         }
         return -1;
@@ -684,53 +696,53 @@ int SlotsMgrtTagOneCmd::SlotKeyRemCheck(){
 }
 
 void SlotsMgrtTagOneCmd::Do() {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         LOG(WARNING) << "Not in slotmigrate mode";
         res_.SetRes(CmdRes::kErrOther, "not set slotmigrate");
         return;
     }
-    if (KeyTypeCheck() < 0){
+    if (KeyTypeCheck() < 0) {
         return;
     }
-    if (SlotKeyRemCheck() < 0){
+    if (SlotKeyRemCheck() < 0) {
         return;
     }
-    if (MigrateOneKey(dest_ip_, dest_port_, key_, key_type_, res_) < 0){
+    if (MigrateOneKey(dest_ip_, dest_port_, key_, key_type_, res_) < 0) {
         return;
     }
     res_.AppendInteger(1);
     return;
 }
 
-void SlotsInfoCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
-    if (!ptr_info->CheckArg(argv.size())) {
+void SlotsInfoCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
+    if (!ptr_info->CheckArg((int) argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsInfo);
     }
     return;
 }
 
 void SlotsInfoCmd::Do() {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         LOG(WARNING) << "Not in slotmigrate mode";
         res_.SetRes(CmdRes::kErrOther, "not set slotmigrate");
         return;
     }
-    std::map<int64_t,int64_t> slotsMap;
-    for (int i = 0; i < HASH_SLOTS_SIZE; ++i){
+    std::map<int64_t, int64_t> slotsMap;
+    for (int i = 0; i < HASH_SLOTS_SIZE; ++i) {
         int64_t card = 0;
-        card = g_pika_server->db()->SCard(SlotKeyPrefix+std::to_string(i));
+        card = g_pika_server->db()->SCard(SlotKeyPrefix + std::to_string(i));
         if (card > 0) {
-            slotsMap[i]=card;
-        }else if (card == 0){
+            slotsMap[i] = card;
+        } else if (card == 0) {
             continue;
-        }else {
+        } else {
             res_.SetRes(CmdRes::kErrOther, "Slotsinfo scard error");
             return;
         }
     }
     res_.AppendArrayLen(slotsMap.size());
-    std::map<int64_t,int64_t>::iterator it;
-    for (it = slotsMap.begin(); it != slotsMap.end(); ++it){
+    std::map<int64_t, int64_t>::iterator it;
+    for (it = slotsMap.begin(); it != slotsMap.end(); ++it) {
         res_.AppendArrayLen(2);
         res_.AppendInteger(it->first);
         res_.AppendInteger(it->second);
@@ -738,7 +750,7 @@ void SlotsInfoCmd::Do() {
     return;
 }
 
-void SlotsHashKeyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
+void SlotsHashKeyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
     if (!ptr_info->CheckArg(argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsHashKey);
     }
@@ -750,13 +762,13 @@ void SlotsHashKeyCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_
 void SlotsHashKeyCmd::Do() {
     res_.AppendArrayLen(keys_.size());
     std::vector<std::string>::const_iterator iter;
-    for (iter = keys_.begin(); iter != keys_.end(); iter++){
+    for (iter = keys_.begin(); iter != keys_.end(); iter++) {
         res_.AppendInteger(SlotNum(*iter));
     }
     return;
 }
 
-void SlotsReloadCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
+void SlotsReloadCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
     if (!ptr_info->CheckArg(argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsReload);
     }
@@ -764,21 +776,21 @@ void SlotsReloadCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_i
 }
 
 void SlotsReloadCmd::Do() {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         LOG(WARNING) << "Not in slotmigrate mode";
         res_.SetRes(CmdRes::kErrOther, "not set slotmigrate");
         return;
     }
     g_pika_server->Bgslotsreload();
-    const PikaServer::BGSlotsReload& info = g_pika_server->bgslots_reload();
+    const PikaServer::BGSlotsReload &info = g_pika_server->bgslots_reload();
     char buf[256];
-    snprintf(buf, sizeof(buf), "+%s : %lu", 
-        info.s_start_time.c_str(), g_pika_server->GetSlotsreloadingCursor());
+    snprintf(buf, sizeof(buf), "+%s : %lu",
+             info.s_start_time.c_str(), g_pika_server->GetSlotsreloadingCursor());
     res_.AppendContent(buf);
     return;
 }
 
-void SlotsReloadOffCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
+void SlotsReloadOffCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
     if (!ptr_info->CheckArg(argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsReloadOff);
     }
@@ -786,7 +798,7 @@ void SlotsReloadOffCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const pt
 }
 
 void SlotsReloadOffCmd::Do() {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         LOG(WARNING) << "Not in slotmigrate mode";
         res_.SetRes(CmdRes::kErrOther, "not set slotmigrate");
         return;
@@ -796,7 +808,7 @@ void SlotsReloadOffCmd::Do() {
     return;
 }
 
-void SlotsDelCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
+void SlotsDelCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
     if (!ptr_info->CheckArg(argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsDel);
     }
@@ -806,14 +818,14 @@ void SlotsDelCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info
 }
 
 void SlotsDelCmd::Do() {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         LOG(WARNING) << "Not in slotmigrate mode";
         res_.SetRes(CmdRes::kErrOther, "not set slotmigrate");
         return;
     }
     std::vector<std::string> keys;
     std::vector<std::string>::const_iterator iter;
-    for (iter = slots_.begin(); iter != slots_.end(); iter++){
+    for (iter = slots_.begin(); iter != slots_.end(); iter++) {
         keys.push_back(SlotKeyPrefix + *iter);
     }
     int64_t count = 0;
@@ -826,7 +838,7 @@ void SlotsDelCmd::Do() {
     return;
 }
 
-void SlotsScanCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_info) {
+void SlotsScanCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo *const ptr_info) {
     if (!ptr_info->CheckArg(argv.size())) {
         res_.SetRes(CmdRes::kWrongNum, kCmdNameSlotsScan);
         return;
@@ -838,7 +850,7 @@ void SlotsScanCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_inf
     }
     size_t argc = argv.size(), index = 3;
     while (index < argc) {
-        std::string opt = slash::StringToLower(argv[index]); 
+        std::string opt = slash::StringToLower(argv[index]);
         if (opt == "match" || opt == "count") {
             index++;
             if (index >= argc) {
@@ -865,7 +877,7 @@ void SlotsScanCmd::DoInitial(PikaCmdArgsType &argv, const CmdInfo* const ptr_inf
 }
 
 void SlotsScanCmd::Do() {
-    if (g_pika_conf->slotmigrate() != true){
+    if (g_pika_conf->slotmigrate() != true) {
         LOG(WARNING) << "Not in slotmigrate mode";
         res_.SetRes(CmdRes::kErrOther, "not set slotmigrate");
         return;
@@ -883,7 +895,8 @@ void SlotsScanCmd::Do() {
         cursor_ = 0;
     }
     for (; iter->Valid() && count_; iter->Next()) {
-        if (pattern_ != "*" && !slash::stringmatchlen(pattern_.data(), pattern_.size(), iter->member().data(), iter->member().size(), 0)) {
+        if (pattern_ != "*" &&
+            !slash::stringmatchlen(pattern_.data(), pattern_.size(), iter->member().data(), iter->member().size(), 0)) {
             continue;
         }
         members.push_back(iter->member());
@@ -894,7 +907,7 @@ void SlotsScanCmd::Do() {
         cursor_ = 0;
     }
     res_.AppendContent("*2");
-  
+
     char buf[32];
     int64_t len = slash::ll2string(buf, sizeof(buf), cursor_);
     res_.AppendStringLen(len);

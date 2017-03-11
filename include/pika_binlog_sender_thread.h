@@ -6,73 +6,74 @@
 #ifndef PIKA_BINLOG_SENDER_THREAD_H_
 #define PIKA_BINLOG_SENDER_THREAD_H_
 
-#include "pink_thread.h"
-//#include "redis_cli.h"
-#include "slice.h"
-#include "status.h"
-
-#include "env.h"
-#include "slash_mutex.h"
-
-
 namespace pink {
-class RedisCli;
+    class RedisCli;
 }
 
+// TODO: 17/3/4 by zmyer
 class PikaBinlogSenderThread : public pink::Thread {
- public:
+public:
 
-  PikaBinlogSenderThread(std::string &ip, int port, slash::SequentialFile *queue, uint32_t filenum, uint64_t con_offset);
+    PikaBinlogSenderThread(std::string &ip, int port, slash::SequentialFile *queue, uint32_t filenum,
+                           uint64_t con_offset);
 
-  virtual ~PikaBinlogSenderThread();
+    virtual ~PikaBinlogSenderThread();
 
-  /*
-   * Get and Set
-   */
-  uint64_t last_record_offset () {
-    slash::RWLock l(&rwlock_, false);
-    return last_record_offset_;
-  }
-  uint32_t filenum() {
-    slash::RWLock l(&rwlock_, false);
-    return filenum_;
-  }
-  uint64_t con_offset() {
-    slash::RWLock l(&rwlock_, false);
-    return con_offset_;
-  }
+    /*
+     * Get and Set
+     */
+    // TODO: 17/3/4 by zmyer
+    uint64_t last_record_offset() {
+        slash::RWLock l(&rwlock_, false);
+        return last_record_offset_;
+    }
 
-  int trim();
-  uint64_t get_next(bool &is_error);
+    // TODO: 17/3/4 by zmyer
+    uint32_t filenum() {
+        slash::RWLock l(&rwlock_, false);
+        return filenum_;
+    }
 
+    // TODO: 17/3/4 by zmyer
+    uint64_t con_offset() {
+        slash::RWLock l(&rwlock_, false);
+        return con_offset_;
+    }
 
- private:
+    int trim();
 
-  slash::Status Parse(std::string &scratch);
-  slash::Status Consume(std::string &scratch);
-  unsigned int ReadPhysicalRecord(slash::Slice *fragment);
-
-  uint64_t con_offset_;
-  uint32_t filenum_;
-
-  uint64_t initial_offset_;
-  uint64_t last_record_offset_;
-  uint64_t end_of_buffer_offset_;
-
-  slash::SequentialFile* queue_;
-  char* const backing_store_;
-  slash::Slice buffer_;
+    uint64_t get_next(bool &is_error);
 
 
-  std::string ip_;
-  int port_;
+private:
 
-  pthread_rwlock_t rwlock_;
+    slash::Status Parse(std::string &scratch);
 
+    slash::Status Consume(std::string &scratch);
 
-  pink::RedisCli *cli_;
+    unsigned int ReadPhysicalRecord(slash::Slice *fragment);
+    //记录块偏移量
+    uint64_t con_offset_;
+    uint32_t filenum_;
 
-  virtual void* ThreadMain();
+    uint64_t initial_offset_;
+    uint64_t last_record_offset_;
+    uint64_t end_of_buffer_offset_;
+
+    //顺序文件对象
+    slash::SequentialFile *queue_;
+    char *const backing_store_;
+    //缓冲区
+    slash::Slice buffer_;
+
+    std::string ip_;
+    int port_;
+
+    pthread_rwlock_t rwlock_;
+
+    pink::RedisCli *cli_;
+
+    virtual void *ThreadMain();
 };
 
 #endif

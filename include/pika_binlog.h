@@ -14,15 +14,13 @@
 
 #ifndef __STDC_FORMAT_MACROS
 # define __STDC_FORMAT_MACROS
-# include <inttypes.h>
-#endif 
 
-#include "env.h"
+# include <inttypes.h>
+
+#endif
+
 //#include "port.h"
 #include "pika_define.h"
-
-#include "slash_status.h"
-#include "slash_mutex.h"
 
 using slash::Status;
 using slash::Slice;
@@ -32,111 +30,123 @@ std::string NewFileName(const std::string name, const uint32_t current);
 
 class Version;
 
-class Binlog
-{
- public:
-  Binlog(const std::string& Binlog_path, const int file_size = 100 * 1024 * 1024);
-  ~Binlog();
+// TODO: 17/3/4 by zmyer
+class Binlog {
+public:
+    Binlog(const std::string &Binlog_path, const int file_size = 100 * 1024 * 1024);
 
-  void Lock()         { mutex_.Lock(); }
-  void Unlock()       { mutex_.Unlock(); }
+    ~Binlog();
 
-  Status Put(const std::string &item);
-  Status Put(const char* item, int len);
+    void Lock() { mutex_.Lock(); }
 
-  Status GetProducerStatus(uint32_t* filenum, uint64_t* pro_offset);
-  /*
-   * Set Producer pro_num and pro_offset with lock
-   */
-  Status SetProducerStatus(uint32_t filenum, uint64_t pro_offset);
+    void Unlock() { mutex_.Unlock(); }
 
-  static Status AppendBlank(slash::WritableFile *file, uint64_t len);
+    Status Put(const std::string &item);
 
-  slash::WritableFile *queue() { return queue_; }
+    Status Put(const char *item, int len);
 
+    Status GetProducerStatus(uint32_t *filenum, uint64_t *pro_offset);
 
-  uint64_t file_size() {
-    return file_size_;
-  }
+    /*
+     * Set Producer pro_num and pro_offset with lock
+     */
+    Status SetProducerStatus(uint32_t filenum, uint64_t pro_offset);
 
-  std::string filename;
+    static Status AppendBlank(slash::WritableFile *file, uint64_t len);
 
- private:
-
-  void InitLogFile();
-  Status EmitPhysicalRecord(RecordType t, const char *ptr, size_t n, int *temp_pro_offset);
+    slash::WritableFile *queue() { return queue_; }
 
 
-  /*
-   * Produce
-   */
-  Status Produce(const Slice &item, int *pro_offset);
+    uint64_t file_size() {
+        return file_size_;
+    }
 
-  uint32_t consumer_num_;
-  uint64_t item_num_;
+    std::string filename;
 
-  Version* version_;
-  slash::WritableFile *queue_;
-  slash::RWFile *versionfile_;
+private:
 
-  slash::Mutex mutex_;
+    void InitLogFile();
 
-  uint32_t pro_num_;
+    Status EmitPhysicalRecord(RecordType t, const char *ptr, size_t n, int *temp_pro_offset);
 
-  int block_offset_;
 
-  char* pool_;
-  bool exit_all_consume_;
-  const std::string binlog_path_;
+    /*
+     * Produce
+     */
+    Status Produce(const Slice &item, int *pro_offset);
 
-  uint64_t file_size_;
+    uint32_t consumer_num_;
+    uint64_t item_num_;
 
-  // Not use
-  //int32_t retry_;
+    Version *version_;
+    slash::WritableFile *queue_;
+    slash::RWFile *versionfile_;
 
-  // No copying allowed
-  Binlog(const Binlog&);
-  void operator=(const Binlog&);
+    slash::Mutex mutex_;
+
+    uint32_t pro_num_;
+
+    int block_offset_;
+
+    char *pool_;
+    bool exit_all_consume_;
+    const std::string binlog_path_;
+
+    uint64_t file_size_;
+
+    // Not use
+    //int32_t retry_;
+
+    // No copying allowed
+    Binlog(const Binlog &);
+
+    void operator=(const Binlog &);
 };
 
 // We have to reserve the useless con_offset_, con_num_ and item_num,
 // to be compatable with version 1.x .
+// TODO: 17/3/4 by zmyer
 class Version {
- public:
-  Version(slash::RWFile *save);
-  ~Version();
+public:
+    Version(slash::RWFile *save);
 
-  Status Init();
+    ~Version();
 
-  // RWLock should be held when access members.
-  Status StableSave();
+    Status Init();
 
-  uint32_t item_num()                  { return item_num_; }
-  void set_item_num(uint32_t item_num) { item_num_ = item_num; }
-  void plus_item_num()                 { item_num_++; }
-  void minus_item_num()                { item_num_--; }
+    // RWLock should be held when access members.
+    Status StableSave();
 
-  uint64_t pro_offset_;
-  uint32_t pro_num_;
-  pthread_rwlock_t rwlock_;
+    uint32_t item_num() { return item_num_; }
 
-  void debug() {
-    slash::RWLock(&rwlock_, false);
-    printf ("Current pro_num %u pro_offset %lu\n", pro_num_, pro_offset_);
-  }
+    void set_item_num(uint32_t item_num) { item_num_ = item_num; }
 
- private:
+    void plus_item_num() { item_num_++; }
 
-  slash::RWFile *save_;
+    void minus_item_num() { item_num_--; }
 
-  // Not used
-  uint64_t con_offset_;
-  uint32_t con_num_;
-  uint32_t item_num_;
+    uint64_t pro_offset_;
+    uint32_t pro_num_;
+    pthread_rwlock_t rwlock_;
 
-  // No copying allowed;
-  Version(const Version&);
-  void operator=(const Version&);
+    void debug() {
+        slash::RWLock(&rwlock_, false);
+        printf("Current pro_num %u pro_offset %lu\n", pro_num_, pro_offset_);
+    }
+
+private:
+
+    slash::RWFile *save_;
+
+    // Not used
+    uint64_t con_offset_;
+    uint32_t con_num_;
+    uint32_t item_num_;
+
+    // No copying allowed;
+    Version(const Version &);
+
+    void operator=(const Version &);
 };
 
 #endif

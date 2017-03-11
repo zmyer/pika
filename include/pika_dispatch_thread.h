@@ -7,18 +7,25 @@
 #define PIKA_DISPATCH_THREAD_H_
 
 #include "pika_worker_thread.h"
-#include "dispatch_thread.h"
 #include "pika_client_conn.h"
+#include "../third/pink/include/dispatch_thread.h"
 
-class PikaDispatchThread : public pink::DispatchThread<PikaClientConn>
-{
+// TODO: 17/3/2 by zmyer
+class PikaDispatchThread : public pink::DispatchThread<PikaClientConn> {
 public:
-  PikaDispatchThread(int port, int work_num, PikaWorkerThread** pika_worker_thread, int cron_interval);
-  PikaDispatchThread(std::string &ip, int port, int work_num, PikaWorkerThread** pika_worker_thread, int cron_interval);
-  PikaDispatchThread(std::set<std::string> &ips, int port, int work_num, PikaWorkerThread** pika_worker_thread, int cron_interval);
-  virtual ~PikaDispatchThread();
-  virtual bool AccessHandle(std::string& ip);
+    PikaDispatchThread(int port, int work_num, PikaWorkerThread **pika_worker_thread, int cron_interval);
 
-  int ClientNum();
+    PikaDispatchThread(std::string &ip, int port, int work_num, PikaWorkerThread **pika_worker_thread,
+                       int cron_interval);
+
+    PikaDispatchThread(std::set<std::string> &ips, int port, int work_num, PikaWorkerThread **pika_worker_thread,
+                       int cron_interval);
+
+    virtual ~PikaDispatchThread();
+
+    virtual bool AccessHandle(std::string &ip);
+
+    int ClientNum();
 };
+
 #endif

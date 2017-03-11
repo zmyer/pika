@@ -10,32 +10,34 @@
 #include "slash_mutex.h"
 #include "redis_cli.h"
 
-
+// TODO: 17/3/5 by zmyer
 class PikaSlavepingThread : public pink::Thread {
 public:
-  PikaSlavepingThread(int64_t sid) : sid_(sid),
-  is_first_send_(true) {
-    cli_ = new pink::RedisCli();
-    cli_->set_connect_timeout(1500);
-	};
-  virtual ~PikaSlavepingThread() {
-    should_exit_ = true;
-    pthread_join(thread_id(), NULL);
-    delete cli_;
-    DLOG(INFO) << " Slaveping thread " << pthread_self() << " exit!!!";
-	};
+    PikaSlavepingThread(int64_t sid) : sid_(sid),
+                                       is_first_send_(true) {
+        cli_ = new pink::RedisCli();
+        cli_->set_connect_timeout(1500);
+    };
 
-  pink::Status Send();
-  pink::Status RecvProc();
+    virtual ~PikaSlavepingThread() {
+        should_exit_ = true;
+        pthread_join(thread_id(), NULL);
+        delete cli_;
+        DLOG(INFO) << " Slaveping thread " << pthread_self() << " exit!!!";
+    };
+
+    pink::Status Send();
+
+    pink::Status RecvProc();
 
 private:
-  int64_t sid_;
-  bool is_first_send_;
+    int64_t sid_;
+    bool is_first_send_;
 
-  int sockfd_;
-  pink::RedisCli *cli_;
+    int sockfd_;
+    pink::RedisCli *cli_;
 
-  virtual void* ThreadMain();
+    virtual void *ThreadMain();
 
 };
 

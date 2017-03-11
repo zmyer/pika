@@ -13,15 +13,22 @@
 const std::string kPikaVersion = "2.1.4";
 const std::string kPikaPidFile = "pika.pid";
 
+// TODO: 17/3/4 by zmyer
 struct ClientInfo {
-  int fd;
-  std::string ip_port;
-  int last_interaction;
+    //客户端描述符
+    int fd;
+    //客户端地址信息
+    std::string ip_port;
+    //客户端交互时间戳
+    int last_interaction;
 };
 
+// TODO: 17/3/4 by zmyer
 struct WorkerCronTask {
-  int task;
-  std::string ip_port;
+    //任务
+    int task;
+    //端口和ip
+    std::string ip_port;
 };
 typedef WorkerCronTask MonitorCronTask;
 //task define
@@ -29,15 +36,20 @@ typedef WorkerCronTask MonitorCronTask;
 #define TASK_KILLALL 1
 
 //slave item
+// TODO: 17/3/4 by zmyer
 struct SlaveItem {
-  int64_t sid;
-  std::string ip_port;
-  int port;
-  pthread_t sender_tid;
-  int hb_fd;
-  int stage;
-  void* sender;
-  struct timeval create_time;
+    //slave节点id
+    int64_t sid;
+    //slave地址信息
+    std::string ip_port;
+    //slave端口号
+    int port;
+    //发送线程的id
+    pthread_t sender_tid;
+    int hb_fd;
+    int stage;
+    void *sender;
+    struct timeval create_time;
 };
 
 #define PIKA_MIN_RESERVED_FDS 5000
@@ -65,15 +77,16 @@ struct SlaveItem {
 //static uint64_t kBinlogSize = 128; 
 //static const uint64_t kBinlogSize = 1024 * 1024 * 100;
 
+// TODO: 17/3/4 by zmyer
 enum RecordType {
-  kZeroType = 0,
-  kFullType = 1,
-  kFirstType = 2,
-  kMiddleType = 3,
-  kLastType = 4,
-  kEof = 5,
-  kBadRecord = 6,
-  kOldRecord = 7
+    kZeroType = 0,
+    kFullType = 1,
+    kFirstType = 2,
+    kMiddleType = 3,
+    kLastType = 4,
+    kEof = 5,
+    kBadRecord = 6,
+    kOldRecord = 7
 };
 
 /*
@@ -85,6 +98,7 @@ static const size_t kBlockSize = 64 * 1024;
 /*
  * Header is Type(1 byte), length (3 bytes), time (4 bytes)
  */
+//头部长度
 static const size_t kHeaderSize = 1 + 3 + 4;
 
 /*

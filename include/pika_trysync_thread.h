@@ -6,28 +6,36 @@
 #ifndef PIKA_TRYSYNC_THREAD_H_
 #define PIKA_TRYSYNC_THREAD_H_
 
-#include "pink_thread.h"
-#include "redis_cli.h"
-
+// TODO: 17/3/4 by zmyer
 class PikaTrysyncThread : public pink::Thread {
 public:
-  PikaTrysyncThread() {
-    cli_ = new pink::RedisCli();
-    cli_->set_connect_timeout(1500);
-	};
-  virtual ~PikaTrysyncThread();
+    // TODO: 17/3/4 by zmyer
+    PikaTrysyncThread() {
+        //创建客户端
+        cli_ = new pink::RedisCli();
+        //设置客户端连接超时时间
+        cli_->set_connect_timeout(1500);
+    };
+
+    virtual ~PikaTrysyncThread();
 
 private:
-  int sockfd_;
-  int64_t sid_;
-  pink::RedisCli *cli_;
+    //套接字描述符
+    int sockfd_;
+    //同步线程id
+    int64_t sid_;
+    //redis客户端
+    pink::RedisCli *cli_;
 
-  bool Send();
-  bool RecvProc();
-  void PrepareRsync();
-  bool TryUpdateMasterOffset();
+    bool Send();
 
-  virtual void* ThreadMain();
+    bool RecvProc();
+
+    void PrepareRsync();
+
+    bool TryUpdateMasterOffset();
+
+    virtual void *ThreadMain();
 
 };
 
